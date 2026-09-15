@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from decimal import Decimal
 from enum import StrEnum
 
+from blue_wren.domain.financial_units import convert_financial_value
+
 
 class FindingStatus(StrEnum):
     """Lifecycle states implemented by the first comparison slice."""
@@ -77,11 +79,29 @@ def compare_observations(
             reason=mismatch,
         )
 
+    normalized_baseline = convert_financial_value(
+        baseline.value,
+        source_unit=baseline.unit,
+        target_unit=actual.unit,
+    )
+    if normalized_baseline is None:
+        return Finding(
+            metric=actual.metric,
+            actual=actual.value,
+            baseline=baseline.value,
+            delta=None,
+            unit=actual.unit,
+            period=actual.period,
+            evidence=actual.evidence,
+            status=FindingStatus.UNRESOLVED,
+            reason="unit_mismatch",
+        )
+
     return Finding(
         metric=actual.metric,
         actual=actual.value,
-        baseline=baseline.value,
-        delta=actual.value - baseline.value,
+        baseline=normalized_baseline,
+        delta=actual.value - normalized_baseline,
         unit=actual.unit,
         period=actual.period,
         evidence=actual.evidence,
@@ -95,8 +115,6 @@ def _comparison_mismatch(
 ) -> str | None:
     if actual.metric != baseline.metric:
         return "metric_mismatch"
-    if actual.unit != baseline.unit:
-        return "unit_mismatch"
     if actual.period != baseline.period:
         return "period_mismatch"
     return None

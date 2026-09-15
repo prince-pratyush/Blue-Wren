@@ -79,7 +79,7 @@ async def test_event_replay_exposes_an_unresolved_unit_mismatch(
     client: AsyncClient,
 ) -> None:
     payload = deepcopy(PAYLOAD)
-    payload["baseline"]["unit"] = "AUD_thousands"
+    payload["baseline"]["unit"] = "USD_millions"
 
     response = await client.post("/v1/event-replays", json=payload)
 
@@ -88,6 +88,24 @@ async def test_event_replay_exposes_an_unresolved_unit_mismatch(
     assert finding["status"] == "unresolved"
     assert finding["delta"] is None
     assert finding["reason"] == "unit_mismatch"
+
+
+@pytest.mark.anyio
+async def test_event_replay_normalizes_compatible_financial_scales(
+    client: AsyncClient,
+) -> None:
+    payload = deepcopy(PAYLOAD)
+    payload["baseline"]["value"] = "120000"
+    payload["baseline"]["unit"] = "AUD_thousands"
+
+    response = await client.post("/v1/event-replays", json=payload)
+
+    assert response.status_code == 200
+    finding = response.json()["findings"][0]
+    assert finding["status"] == "proposed"
+    assert finding["baseline"] == "120"
+    assert finding["delta"] == "5.0"
+    assert finding["unit"] == "AUD_millions"
 
 
 @pytest.mark.anyio
