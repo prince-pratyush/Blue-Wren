@@ -1,7 +1,10 @@
+from datetime import datetime
 from decimal import Decimal
 from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
+
+from blue_wren.domain.evidence import RightsBasis
 
 Identifier = Annotated[str, Field(min_length=1, max_length=128)]
 Locator = Annotated[str, Field(min_length=1, max_length=512)]
@@ -62,3 +65,18 @@ class EventReplayResponse(BaseModel):
     event_id: str
     company_id: str
     findings: list[FindingResponse]
+
+
+class DocumentVersionResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    document_id: str
+    version_id: str
+    content_sha256: str
+    byte_size: int
+    media_type: str
+    source_name: str
+    rights_basis: RightsBasis
+    published_at: datetime
+    available_at: datetime
+    ingested_at: datetime
