@@ -14,6 +14,7 @@ class ExpectedFinding:
     unit: str
     period: str
     evidence_document_id: str
+    evidence_document_version_id: str
     status: FindingStatus
 
 

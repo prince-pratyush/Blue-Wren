@@ -22,6 +22,7 @@ def test_replay_produces_an_evidence_linked_variance() -> None:
     assert finding.period == "2026-Q2"
     assert finding.status is FindingStatus.PROPOSED
     assert finding.evidence.document_id == "acme-q2-results"
+    assert finding.evidence.document_version_id == "acme-q2-results:version-1"
     assert finding.evidence.locator == "page=2;table=results;row=revenue"
 
 
@@ -39,6 +40,7 @@ def test_replay_marks_different_periods_as_unresolved(tmp_path: Path) -> None:
             "period": "2026-Q2",
             "evidence": {
               "document_id": "acme-q2-results",
+              "document_version_id": "acme-q2-results:version-1",
               "locator": "page=2;table=results;row=revenue"
             }
           },

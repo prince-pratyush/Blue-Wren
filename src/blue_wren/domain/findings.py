@@ -17,6 +17,7 @@ class FindingStatus(StrEnum):
 @dataclass(frozen=True, slots=True)
 class EvidenceReference:
     document_id: str
+    document_version_id: str
     locator: str
 
 

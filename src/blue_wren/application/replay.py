@@ -46,6 +46,7 @@ def replay_event_fixture(path: Path) -> EventReplayResult:
         period=actual_payload["period"],
         evidence=EvidenceReference(
             document_id=evidence_payload["document_id"],
+            document_version_id=evidence_payload["document_version_id"],
             locator=evidence_payload["locator"],
         ),
     )

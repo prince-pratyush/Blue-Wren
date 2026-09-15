@@ -30,6 +30,7 @@ def finding(*, status: FindingStatus = FindingStatus.PROPOSED) -> Finding:
         period="2026-Q2",
         evidence=EvidenceReference(
             document_id="acme-q2-results",
+            document_version_id="acme-q2-results:version-1",
             locator="page=2;table=results;row=revenue",
         ),
         status=status,

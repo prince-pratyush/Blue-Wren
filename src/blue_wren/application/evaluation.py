@@ -72,6 +72,10 @@ def _mismatches(expected: ExpectedFinding, emitted: Finding) -> tuple[str, ...]:
             "evidence document",
             expected.evidence_document_id == emitted.evidence.document_id,
         ),
+        (
+            "evidence document version",
+            expected.evidence_document_version_id == emitted.evidence.document_version_id,
+        ),
         ("status", expected.status == emitted.status),
     )
     return tuple(name for name, matches in fields if not matches)

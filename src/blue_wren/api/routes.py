@@ -59,6 +59,7 @@ def create_event_replay(request: EventReplayRequest) -> EventReplayResponse:
         period=request.actual.period,
         evidence=EvidenceReference(
             document_id=request.actual.evidence.document_id,
+            document_version_id=request.actual.evidence.document_version_id,
             locator=request.actual.evidence.locator,
         ),
     )

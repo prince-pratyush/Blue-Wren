@@ -7,12 +7,14 @@ from pydantic import BaseModel, ConfigDict, Field
 from blue_wren.domain.evidence import RightsBasis
 
 Identifier = Annotated[str, Field(min_length=1, max_length=128)]
+EvidenceVersionIdentifier = Annotated[str, Field(min_length=1, max_length=256)]
 Locator = Annotated[str, Field(min_length=1, max_length=512)]
 FinancialValue = Annotated[Decimal, Field(allow_inf_nan=False, max_digits=30)]
 
 
 class EvidenceReferenceRequest(BaseModel):
     document_id: Identifier
+    document_version_id: EvidenceVersionIdentifier
     locator: Locator
 
 
@@ -42,6 +44,7 @@ class EvidenceReferenceResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     document_id: str
+    document_version_id: str
     locator: str
 
 

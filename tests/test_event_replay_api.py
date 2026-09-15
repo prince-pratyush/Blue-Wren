@@ -31,6 +31,7 @@ PAYLOAD: dict[str, Any] = {
         "period": "2026-Q2",
         "evidence": {
             "document_id": "acme-q2-results",
+            "document_version_id": "acme-q2-results:version-1",
             "locator": "page=2;table=results;row=revenue",
         },
     },
@@ -63,6 +64,7 @@ async def test_event_replay_returns_an_evidence_linked_finding(
                 "period": "2026-Q2",
                 "evidence": {
                     "document_id": "acme-q2-results",
+                    "document_version_id": "acme-q2-results:version-1",
                     "locator": "page=2;table=results;row=revenue",
                 },
                 "status": "proposed",
@@ -96,3 +98,27 @@ async def test_event_replay_rejects_missing_evidence(client: AsyncClient) -> Non
     response = await client.post("/v1/event-replays", json=payload)
 
     assert response.status_code == 422
+
+
+@pytest.mark.anyio
+async def test_event_replay_rejects_missing_evidence_version(client: AsyncClient) -> None:
+    payload = deepcopy(PAYLOAD)
+    del payload["actual"]["evidence"]["document_version_id"]
+
+    response = await client.post("/v1/event-replays", json=payload)
+
+    assert response.status_code == 422
+
+
+@pytest.mark.anyio
+async def test_event_replay_accepts_content_addressed_version_ids(
+    client: AsyncClient,
+) -> None:
+    payload = deepcopy(PAYLOAD)
+    version_id = f"acme-q2-results:{'a' * 64}"
+    payload["actual"]["evidence"]["document_version_id"] = version_id
+
+    response = await client.post("/v1/event-replays", json=payload)
+
+    assert response.status_code == 200
+    assert response.json()["findings"][0]["evidence"]["document_version_id"] == version_id

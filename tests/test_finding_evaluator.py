@@ -1,3 +1,4 @@
+from dataclasses import replace
 from decimal import Decimal
 from fractions import Fraction
 
@@ -14,6 +15,7 @@ EXPECTED = (
         unit="AUD_millions",
         period="2026-Q2",
         evidence_document_id="acme-q2-results",
+        evidence_document_version_id="acme-q2-results:version-1",
         status=FindingStatus.PROPOSED,
     ),
 )
@@ -29,6 +31,7 @@ def finding(*, delta: Decimal = Decimal("5.0")) -> Finding:
         period="2026-Q2",
         evidence=EvidenceReference(
             document_id="acme-q2-results",
+            document_version_id="acme-q2-results:version-1",
             locator="page=2;table=results;row=revenue",
         ),
         status=FindingStatus.PROPOSED,
@@ -77,6 +80,7 @@ def test_score_findings_counts_an_unsupported_extra_finding() -> None:
         period="2026-Q2",
         evidence=EvidenceReference(
             document_id="acme-q2-results",
+            document_version_id="acme-q2-results:version-1",
             locator="page=2;table=results;row=ebitda",
         ),
         status=FindingStatus.PROPOSED,
@@ -88,3 +92,19 @@ def test_score_findings_counts_an_unsupported_extra_finding() -> None:
     assert report.precision == Fraction(1, 2)
     assert report.recall == Fraction(1, 1)
     assert report.false_positives == 1
+
+
+def test_score_findings_blocks_the_wrong_evidence_version() -> None:
+    emitted = replace(
+        finding(),
+        evidence=EvidenceReference(
+            document_id="acme-q2-results",
+            document_version_id="acme-q2-results:version-2",
+            locator="page=2;table=results;row=revenue",
+        ),
+    )
+
+    report = score_findings(expected=EXPECTED, emitted=(emitted,))
+
+    assert report.passed is False
+    assert report.critical_errors == ("revenue: evidence document version mismatch",)
