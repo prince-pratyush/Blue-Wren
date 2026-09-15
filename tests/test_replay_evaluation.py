@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 from blue_wren.application.eval_runner import (
+    EvaluationFixtureError,
     load_expected_findings,
     run_replay_evaluation,
 )
@@ -14,6 +15,7 @@ from blue_wren.domain.findings import FindingStatus
 FIXTURES = Path(__file__).parent / "fixtures"
 EVENT = FIXTURES / "acme_q2_2026.json"
 EXPECTED = FIXTURES / "acme_q2_2026.expected.json"
+SOURCES = FIXTURES / "acme_q2_2026.sources.json"
 
 
 def test_load_expected_findings_preserves_financial_values() -> None:
@@ -26,7 +28,11 @@ def test_load_expected_findings_preserves_financial_values() -> None:
 
 
 def test_run_replay_evaluation_passes_a_golden_case() -> None:
-    report = run_replay_evaluation(event_path=EVENT, expected_path=EXPECTED)
+    report = run_replay_evaluation(
+        event_path=EVENT,
+        expected_path=EXPECTED,
+        source_manifest_path=SOURCES,
+    )
 
     assert report.passed is True
     assert report.true_positives == 1
@@ -39,7 +45,11 @@ def test_run_replay_evaluation_fails_a_changed_expectation(tmp_path: Path) -> No
     payload["findings"][0]["delta"] = "50.0"
     expected_path.write_text(json.dumps(payload), encoding="utf-8")
 
-    report = run_replay_evaluation(event_path=EVENT, expected_path=expected_path)
+    report = run_replay_evaluation(
+        event_path=EVENT,
+        expected_path=expected_path,
+        source_manifest_path=SOURCES,
+    )
 
     assert report.passed is False
     assert report.critical_errors == ("revenue: delta mismatch",)
@@ -48,7 +58,7 @@ def test_run_replay_evaluation_fails_a_changed_expectation(tmp_path: Path) -> No
 def test_eval_smoke_cli_returns_success_and_machine_readable_output(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    exit_code = main([str(EVENT), str(EXPECTED)])
+    exit_code = main([str(EVENT), str(EXPECTED), str(SOURCES)])
 
     assert exit_code == 0
     output = json.loads(capsys.readouterr().out)
@@ -72,9 +82,95 @@ def test_eval_smoke_cli_returns_failure_for_a_regression(
     payload["findings"][0]["actual"] = "999.0"
     expected_path.write_text(json.dumps(payload), encoding="utf-8")
 
-    exit_code = main([str(EVENT), str(expected_path)])
+    exit_code = main([str(EVENT), str(expected_path), str(SOURCES)])
 
     assert exit_code == 1
     output = json.loads(capsys.readouterr().out)
     assert output["passed"] is False
     assert output["critical_errors"] == ["revenue: actual mismatch"]
+
+
+def test_evaluation_rejects_evidence_unavailable_at_the_cutoff(tmp_path: Path) -> None:
+    manifest_path = tmp_path / "future.sources.json"
+    payload = json.loads(SOURCES.read_text(encoding="utf-8"))
+    payload["sources"][0]["available_at"] = "2026-08-20T00:00:01+00:00"
+    manifest_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(EvaluationFixtureError, match="source was unavailable at cutoff"):
+        run_replay_evaluation(
+            event_path=EVENT,
+            expected_path=EXPECTED,
+            source_manifest_path=manifest_path,
+        )
+
+
+def test_evaluation_rejects_expected_evidence_outside_manifest(tmp_path: Path) -> None:
+    expected_path = tmp_path / "unknown-source.expected.json"
+    payload = json.loads(EXPECTED.read_text(encoding="utf-8"))
+    payload["findings"][0]["evidence_document_version_id"] = (
+        "acme-q2-results:unlisted-version"
+    )
+    expected_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(EvaluationFixtureError, match="expected evidence is not in source manifest"):
+        run_replay_evaluation(
+            event_path=EVENT,
+            expected_path=expected_path,
+            source_manifest_path=SOURCES,
+        )
+
+
+def test_evaluation_rejects_emitted_evidence_outside_manifest(tmp_path: Path) -> None:
+    event_path = tmp_path / "unknown-source.json"
+    payload = json.loads(EVENT.read_text(encoding="utf-8"))
+    payload["actual"]["evidence"]["document_version_id"] = "unlisted-version"
+    event_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(EvaluationFixtureError, match="emitted evidence is not in source manifest"):
+        run_replay_evaluation(
+            event_path=event_path,
+            expected_path=EXPECTED,
+            source_manifest_path=SOURCES,
+        )
+
+
+def test_evaluation_rejects_manifest_for_a_different_event(tmp_path: Path) -> None:
+    manifest_path = tmp_path / "different-event.sources.json"
+    payload = json.loads(SOURCES.read_text(encoding="utf-8"))
+    payload["event_id"] = "different-event"
+    manifest_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(EvaluationFixtureError, match="manifest event does not match"):
+        run_replay_evaluation(
+            event_path=EVENT,
+            expected_path=EXPECTED,
+            source_manifest_path=manifest_path,
+        )
+
+
+def test_evaluation_rejects_duplicate_source_versions(tmp_path: Path) -> None:
+    manifest_path = tmp_path / "duplicate.sources.json"
+    payload = json.loads(SOURCES.read_text(encoding="utf-8"))
+    payload["sources"].append(payload["sources"][0])
+    manifest_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(EvaluationFixtureError, match="duplicate versions"):
+        run_replay_evaluation(
+            event_path=EVENT,
+            expected_path=EXPECTED,
+            source_manifest_path=manifest_path,
+        )
+
+
+def test_evaluation_requires_timezone_aware_cutoff(tmp_path: Path) -> None:
+    manifest_path = tmp_path / "naive-cutoff.sources.json"
+    payload = json.loads(SOURCES.read_text(encoding="utf-8"))
+    payload["cutoff_at"] = "2026-08-20T00:00:00"
+    manifest_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(EvaluationFixtureError, match="timestamps require a timezone"):
+        run_replay_evaluation(
+            event_path=EVENT,
+            expected_path=EXPECTED,
+            source_manifest_path=manifest_path,
+        )

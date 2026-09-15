@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from datetime import datetime
 from decimal import Decimal
 from fractions import Fraction
 
@@ -27,3 +28,17 @@ class EvaluationReport:
     false_positives: int
     false_negatives: int
     critical_errors: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class EvaluationSource:
+    document_id: str
+    version_id: str
+    available_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
+class EvaluationSourceManifest:
+    event_id: str
+    cutoff_at: datetime
+    sources: tuple[EvaluationSource, ...]

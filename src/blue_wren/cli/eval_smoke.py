@@ -10,10 +10,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("event", type=Path)
     parser.add_argument("expected", type=Path)
+    parser.add_argument("sources", type=Path)
     args = parser.parse_args(argv)
     report = run_replay_evaluation(
         event_path=args.event,
         expected_path=args.expected,
+        source_manifest_path=args.sources,
     )
     print(
         json.dumps(
