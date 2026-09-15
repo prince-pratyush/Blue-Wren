@@ -12,4 +12,6 @@ test:
 	uv run --no-sync coverage report
 
 eval-smoke:
-	uv run --no-sync pytest -q tests/test_event_replay.py
+	uv run --no-sync python -m blue_wren.cli.eval_smoke \
+		tests/fixtures/acme_q2_2026.json \
+		tests/fixtures/acme_q2_2026.expected.json

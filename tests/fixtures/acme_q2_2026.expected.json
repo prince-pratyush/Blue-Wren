@@ -1,0 +1,14 @@
+{
+  "findings": [
+    {
+      "metric": "revenue",
+      "actual": "125.0",
+      "baseline": "120.0",
+      "delta": "5.0",
+      "unit": "AUD_millions",
+      "period": "2026-Q2",
+      "evidence_document_id": "acme-q2-results",
+      "status": "proposed"
+    }
+  ]
+}
