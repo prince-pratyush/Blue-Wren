@@ -1,4 +1,7 @@
-.PHONY: check test eval-smoke
+.PHONY: api check test eval-smoke
+
+api:
+	uv run uvicorn blue_wren.api.main:app --reload
 
 check:
 	uv run ruff check .

@@ -6,15 +6,18 @@ build-backend = "hatchling.build"
 name = "blue-wren"
 version = "0.1.0"
 description = "Evidence-linked investment research review workspace"
-readme = "README.md"
 requires-python = ">=3.12"
 license = { text = "Proprietary" }
 authors = [{ name = "Prince Pratyush" }]
-dependencies = []
+dependencies = [
+  "fastapi>=0.116,<1",
+  "uvicorn>=0.35,<1",
+]
 
 [dependency-groups]
 dev = [
   "coverage[toml]>=7.10,<8",
+  "httpx>=0.28,<1",
   "mypy>=1.17,<2",
   "pytest>=7.4,<8",
   "ruff>=0.12,<1",

@@ -16,6 +16,20 @@ from blue_wren.domain.findings import (
 )
 
 
+def replay_event(
+    *,
+    event_id: str,
+    company_id: str,
+    actual: ReportedObservation,
+    baseline: BaselineObservation,
+) -> EventReplayResult:
+    return EventReplayResult(
+        event_id=event_id,
+        company_id=company_id,
+        findings=(compare_observations(actual, baseline),),
+    )
+
+
 def replay_event_fixture(path: Path) -> EventReplayResult:
     """Load one event fixture and create a reviewable comparison."""
     payload: dict[str, Any] = json.loads(path.read_text(encoding="utf-8"))
@@ -42,8 +56,9 @@ def replay_event_fixture(path: Path) -> EventReplayResult:
         period=baseline_payload["period"],
     )
 
-    return EventReplayResult(
+    return replay_event(
         event_id=payload["event_id"],
         company_id=payload["company_id"],
-        findings=(compare_observations(actual, baseline),),
+        actual=actual,
+        baseline=baseline,
     )
