@@ -6,6 +6,7 @@ import pytest
 
 from blue_wren.application.review import (
     create_finding_history,
+    mark_source_version_stale,
     record_review_decision,
     revise_finding,
 )
@@ -170,3 +171,107 @@ def test_history_requires_identity_and_unambiguous_time(
 ) -> None:
     with pytest.raises(ReviewValidationError, match=message):
         create_finding_history(finding_id, finding(), created_at)
+
+
+def test_new_source_version_stales_an_accepted_finding() -> None:
+    history = create_finding_history("finding-revenue", finding(), CREATED_AT)
+    reviewed = record_review_decision(
+        history,
+        expected_version=1,
+        outcome=ReviewOutcome.ACCEPTED,
+        reviewer_id="analyst-7",
+        decided_at=DECIDED_AT,
+    )
+
+    stale = mark_source_version_stale(
+        reviewed,
+        expected_version=1,
+        document_id="acme-q2-results",
+        superseding_version_id="acme-q2-results:version-2",
+        marked_at=datetime(2026, 9, 15, 1, 15, tzinfo=UTC),
+    )
+
+    assert stale.current_outcome is ReviewOutcome.STALE
+    assert stale.decisions == reviewed.decisions
+    assert stale.staleness[0].superseded_version_id == "acme-q2-results:version-1"
+    assert stale.staleness[0].superseding_version_id == "acme-q2-results:version-2"
+
+
+def test_source_change_only_stales_dependent_findings() -> None:
+    history = create_finding_history("finding-revenue", finding(), CREATED_AT)
+
+    unchanged = mark_source_version_stale(
+        history,
+        expected_version=1,
+        document_id="different-document",
+        superseding_version_id="different-document:version-2",
+        marked_at=DECIDED_AT,
+    )
+
+    assert unchanged is history
+    assert unchanged.current_outcome is ReviewOutcome.PENDING
+
+
+def test_current_source_version_does_not_stale_a_finding() -> None:
+    history = create_finding_history("finding-revenue", finding(), CREATED_AT)
+
+    unchanged = mark_source_version_stale(
+        history,
+        expected_version=1,
+        document_id="acme-q2-results",
+        superseding_version_id="acme-q2-results:version-1",
+        marked_at=DECIDED_AT,
+    )
+
+    assert unchanged is history
+
+
+def test_revising_a_stale_finding_requires_fresh_review() -> None:
+    history = create_finding_history("finding-revenue", finding(), CREATED_AT)
+    stale = mark_source_version_stale(
+        history,
+        expected_version=1,
+        document_id="acme-q2-results",
+        superseding_version_id="acme-q2-results:version-2",
+        marked_at=DECIDED_AT,
+    )
+    revised_finding = replace(
+        finding(),
+        evidence=replace(
+            finding().evidence,
+            document_version_id="acme-q2-results:version-2",
+        ),
+    )
+
+    revised = revise_finding(
+        stale,
+        expected_version=1,
+        finding=revised_finding,
+        created_at=datetime(2026, 9, 15, 1, 20, tzinfo=UTC),
+    )
+
+    assert revised.current_revision.version == 2
+    assert revised.current_outcome is ReviewOutcome.PENDING
+    assert len(revised.staleness) == 1
+
+
+def test_repeated_staleness_event_is_idempotent() -> None:
+    history = create_finding_history("finding-revenue", finding(), CREATED_AT)
+    stale = mark_source_version_stale(
+        history,
+        expected_version=1,
+        document_id="acme-q2-results",
+        superseding_version_id="acme-q2-results:version-2",
+        marked_at=DECIDED_AT,
+    )
+
+    repeated = mark_source_version_stale(
+        stale,
+        expected_version=1,
+        document_id="acme-q2-results",
+        superseding_version_id="acme-q2-results:version-2",
+        marked_at=DECIDED_AT,
+    )
+
+    assert repeated is stale
+    assert len(repeated.staleness) == 1

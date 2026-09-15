@@ -5,6 +5,7 @@ from blue_wren.domain.findings import Finding, FindingStatus
 from blue_wren.domain.review import (
     FindingHistory,
     FindingRevision,
+    FindingStaleness,
     ReviewConflict,
     ReviewDecision,
     ReviewOutcome,
@@ -41,8 +42,8 @@ def record_review_decision(
     _require_current_version(current.version, expected_version)
     _require_identity(reviewer_id, "reviewer_id")
     _require_timezone(decided_at)
-    if outcome is ReviewOutcome.PENDING:
-        raise ReviewValidationError("pending is not a review decision")
+    if outcome in {ReviewOutcome.PENDING, ReviewOutcome.STALE}:
+        raise ReviewValidationError(f"{outcome} is not a review decision")
     if history.current_outcome is not ReviewOutcome.PENDING:
         raise ReviewConflict(f"finding version {current.version} is already reviewed")
     if (
@@ -79,6 +80,41 @@ def revise_finding(
         created_at=created_at,
     )
     return replace(history, revisions=(*history.revisions, revision))
+
+
+def mark_source_version_stale(
+    history: FindingHistory,
+    *,
+    expected_version: int,
+    document_id: str,
+    superseding_version_id: str,
+    marked_at: datetime,
+) -> FindingHistory:
+    current = history.current_revision
+    _require_current_version(current.version, expected_version)
+    _require_identity(document_id, "document_id")
+    _require_identity(superseding_version_id, "superseding_version_id")
+    _require_timezone(marked_at)
+    evidence = current.finding.evidence
+    if evidence.document_id != document_id:
+        return history
+    if evidence.document_version_id == superseding_version_id:
+        return history
+    if any(
+        event.finding_version == current.version
+        and event.superseding_version_id == superseding_version_id
+        for event in history.staleness
+    ):
+        return history
+
+    event = FindingStaleness(
+        finding_id=current.finding_id,
+        finding_version=current.version,
+        superseded_version_id=evidence.document_version_id,
+        superseding_version_id=superseding_version_id,
+        marked_at=marked_at,
+    )
+    return replace(history, staleness=(*history.staleness, event))
 
 
 def _require_current_version(current_version: int, expected_version: int) -> None:

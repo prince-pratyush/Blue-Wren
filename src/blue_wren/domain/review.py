@@ -10,6 +10,7 @@ class ReviewOutcome(StrEnum):
     ACCEPTED = "accepted"
     REJECTED = "rejected"
     DEFERRED = "deferred"
+    STALE = "stale"
 
 
 class ReviewConflict(ValueError):
@@ -39,9 +40,19 @@ class ReviewDecision:
 
 
 @dataclass(frozen=True, slots=True)
+class FindingStaleness:
+    finding_id: str
+    finding_version: int
+    superseded_version_id: str
+    superseding_version_id: str
+    marked_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
 class FindingHistory:
     revisions: tuple[FindingRevision, ...]
     decisions: tuple[ReviewDecision, ...]
+    staleness: tuple[FindingStaleness, ...] = ()
 
     @property
     def current_revision(self) -> FindingRevision:
@@ -50,6 +61,8 @@ class FindingHistory:
     @property
     def current_outcome(self) -> ReviewOutcome:
         current_version = self.current_revision.version
+        if any(event.finding_version == current_version for event in self.staleness):
+            return ReviewOutcome.STALE
         return next(
             (
                 decision.outcome
