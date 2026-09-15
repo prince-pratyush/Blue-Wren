@@ -1,0 +1,29 @@
+name: quality
+
+on:
+  pull_request:
+  push:
+    branches:
+      - prince/foundation
+
+permissions:
+  contents: read
+
+concurrency:
+  group: quality-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4
+        with:
+          version: "0.10.4"
+          python-version: "3.12"
+          enable-cache: true
+      - run: uv sync --locked
+      - run: make check
+      - run: make test
