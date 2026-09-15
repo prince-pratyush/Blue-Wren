@@ -20,6 +20,14 @@ class _Unit:
     factor: Decimal
 
 
+@dataclass(frozen=True, slots=True)
+class FinancialNormalization:
+    source_value: Decimal
+    source_unit: str
+    normalized_value: Decimal
+    normalized_unit: str
+
+
 def convert_financial_value(
     value: Decimal,
     *,

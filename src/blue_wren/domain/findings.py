@@ -6,7 +6,10 @@ from dataclasses import dataclass
 from decimal import Decimal
 from enum import StrEnum
 
-from blue_wren.domain.financial_units import convert_financial_value
+from blue_wren.domain.financial_units import (
+    FinancialNormalization,
+    convert_financial_value,
+)
 
 
 class FindingStatus(StrEnum):
@@ -51,6 +54,7 @@ class Finding:
     evidence: EvidenceReference
     status: FindingStatus
     reason: str | None = None
+    baseline_normalization: FinancialNormalization | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -106,6 +110,16 @@ def compare_observations(
         period=actual.period,
         evidence=actual.evidence,
         status=FindingStatus.PROPOSED,
+        baseline_normalization=(
+            FinancialNormalization(
+                source_value=baseline.value,
+                source_unit=baseline.unit,
+                normalized_value=normalized_baseline,
+                normalized_unit=actual.unit,
+            )
+            if baseline.unit != actual.unit
+            else None
+        ),
     )
 
 

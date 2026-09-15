@@ -48,6 +48,15 @@ class EvidenceReferenceResponse(BaseModel):
     locator: str
 
 
+class FinancialNormalizationResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    source_value: Decimal
+    source_unit: str
+    normalized_value: Decimal
+    normalized_unit: str
+
+
 class FindingResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -60,6 +69,7 @@ class FindingResponse(BaseModel):
     evidence: EvidenceReferenceResponse
     status: Literal["proposed", "unresolved"]
     reason: str | None
+    baseline_normalization: FinancialNormalizationResponse | None
 
 
 class EventReplayResponse(BaseModel):

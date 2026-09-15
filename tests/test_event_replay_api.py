@@ -69,6 +69,7 @@ async def test_event_replay_returns_an_evidence_linked_finding(
                 },
                 "status": "proposed",
                 "reason": None,
+                "baseline_normalization": None,
             }
         ],
     }
@@ -106,6 +107,12 @@ async def test_event_replay_normalizes_compatible_financial_scales(
     assert finding["baseline"] == "120"
     assert finding["delta"] == "5.0"
     assert finding["unit"] == "AUD_millions"
+    assert finding["baseline_normalization"] == {
+        "source_value": "120000",
+        "source_unit": "AUD_thousands",
+        "normalized_value": "120",
+        "normalized_unit": "AUD_millions",
+    }
 
 
 @pytest.mark.anyio

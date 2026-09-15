@@ -1,6 +1,6 @@
 from decimal import Decimal
 
-from blue_wren.domain.financial_units import convert_financial_value
+from blue_wren.domain.financial_units import FinancialNormalization, convert_financial_value
 from blue_wren.domain.findings import (
     BaselineObservation,
     EvidenceReference,
@@ -95,6 +95,21 @@ def test_comparison_normalizes_baseline_into_reported_unit() -> None:
     assert finding.baseline == Decimal("120")
     assert finding.delta == Decimal("5")
     assert finding.unit == "AUD_millions"
+    assert finding.baseline_normalization == FinancialNormalization(
+        source_value=Decimal("120000"),
+        source_unit="AUD_thousands",
+        normalized_value=Decimal("120"),
+        normalized_unit="AUD_millions",
+    )
+
+
+def test_comparison_omits_normalization_when_units_are_unchanged() -> None:
+    finding = compare_observations(
+        reported(value="125", unit="AUD_millions"),
+        baseline(value="120", unit="AUD_millions"),
+    )
+
+    assert finding.baseline_normalization is None
 
 
 def test_comparison_keeps_incompatible_dimensions_unresolved() -> None:
@@ -105,3 +120,4 @@ def test_comparison_keeps_incompatible_dimensions_unresolved() -> None:
 
     assert finding.status is FindingStatus.UNRESOLVED
     assert finding.reason == "unit_mismatch"
+    assert finding.baseline_normalization is None
