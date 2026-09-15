@@ -1,15 +1,15 @@
 .PHONY: api check test eval-smoke
 
 api:
-	uv run uvicorn blue_wren.api.main:app --reload
+	uv run --no-sync uvicorn blue_wren.api.main:app --reload
 
 check:
-	uv run ruff check .
-	uv run mypy
+	uv run --no-sync ruff check .
+	uv run --no-sync mypy
 
 test:
-	uv run coverage run -m pytest
-	uv run coverage report
+	uv run --no-sync coverage run -m pytest
+	uv run --no-sync coverage report
 
 eval-smoke:
-	uv run pytest -q tests/test_event_replay.py
+	uv run --no-sync pytest -q tests/test_event_replay.py
