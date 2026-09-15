@@ -14,6 +14,7 @@ EXPECTED = (
         delta=Decimal("5.0"),
         unit="AUD_millions",
         period="2026-Q2",
+        basis="reported",
         evidence_document_id="acme-q2-results",
         evidence_document_version_id="acme-q2-results:version-1",
         status=FindingStatus.PROPOSED,
@@ -29,6 +30,7 @@ def finding(*, delta: Decimal = Decimal("5.0")) -> Finding:
         delta=delta,
         unit="AUD_millions",
         period="2026-Q2",
+        basis="reported",
         evidence=EvidenceReference(
             document_id="acme-q2-results",
             document_version_id="acme-q2-results:version-1",
@@ -78,6 +80,7 @@ def test_score_findings_counts_an_unsupported_extra_finding() -> None:
         delta=Decimal("2.0"),
         unit="AUD_millions",
         period="2026-Q2",
+        basis="reported",
         evidence=EvidenceReference(
             document_id="acme-q2-results",
             document_version_id="acme-q2-results:version-1",
@@ -108,3 +111,13 @@ def test_score_findings_blocks_the_wrong_evidence_version() -> None:
 
     assert report.passed is False
     assert report.critical_errors == ("revenue: evidence document version mismatch",)
+
+
+def test_score_findings_blocks_the_wrong_financial_basis() -> None:
+    report = score_findings(
+        expected=EXPECTED,
+        emitted=(replace(finding(), basis="underlying"),),
+    )
+
+    assert report.passed is False
+    assert report.critical_errors == ("revenue: basis mismatch",)

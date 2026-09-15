@@ -10,12 +10,13 @@ from blue_wren.domain.findings import (
 )
 
 
-def reported(*, value: str, unit: str) -> ReportedObservation:
+def reported(*, value: str, unit: str, basis: str = "reported") -> ReportedObservation:
     return ReportedObservation(
         metric="revenue",
         value=Decimal(value),
         unit=unit,
         period="2026-Q2",
+        basis=basis,
         evidence=EvidenceReference(
             document_id="acme-q2-results",
             document_version_id="acme-q2-results:version-1",
@@ -24,12 +25,13 @@ def reported(*, value: str, unit: str) -> ReportedObservation:
     )
 
 
-def baseline(*, value: str, unit: str) -> BaselineObservation:
+def baseline(*, value: str, unit: str, basis: str = "reported") -> BaselineObservation:
     return BaselineObservation(
         metric="revenue",
         value=Decimal(value),
         unit=unit,
         period="2026-Q2",
+        basis=basis,
     )
 
 
@@ -121,3 +123,14 @@ def test_comparison_keeps_incompatible_dimensions_unresolved() -> None:
     assert finding.status is FindingStatus.UNRESOLVED
     assert finding.reason == "unit_mismatch"
     assert finding.baseline_normalization is None
+
+
+def test_comparison_keeps_different_accounting_bases_unresolved() -> None:
+    finding = compare_observations(
+        reported(value="125", unit="AUD_millions", basis="reported"),
+        baseline(value="120", unit="AUD_millions", basis="underlying"),
+    )
+
+    assert finding.status is FindingStatus.UNRESOLVED
+    assert finding.reason == "basis_mismatch"
+    assert finding.basis == "reported"

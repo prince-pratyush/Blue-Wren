@@ -23,6 +23,7 @@ class ReportedObservationRequest(BaseModel):
     value: FinancialValue
     unit: Identifier
     period: Identifier
+    basis: Identifier
     evidence: EvidenceReferenceRequest
 
 
@@ -31,6 +32,7 @@ class BaselineObservationRequest(BaseModel):
     value: FinancialValue
     unit: Identifier
     period: Identifier
+    basis: Identifier
 
 
 class EventReplayRequest(BaseModel):
@@ -66,6 +68,7 @@ class FindingResponse(BaseModel):
     delta: Decimal | None
     unit: str
     period: str
+    basis: str
     evidence: EvidenceReferenceResponse
     status: Literal["proposed", "unresolved"]
     reason: str | None

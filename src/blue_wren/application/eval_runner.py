@@ -59,6 +59,7 @@ def _expected_finding(payload: dict[str, Any]) -> ExpectedFinding:
         delta=Decimal(delta) if delta is not None else None,
         unit=payload["unit"],
         period=payload["period"],
+        basis=payload["basis"],
         evidence_document_id=payload["evidence_document_id"],
         evidence_document_version_id=payload["evidence_document_version_id"],
         status=FindingStatus(payload["status"]),

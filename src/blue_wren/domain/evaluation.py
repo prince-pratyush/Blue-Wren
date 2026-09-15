@@ -14,6 +14,7 @@ class ExpectedFinding:
     delta: Decimal | None
     unit: str
     period: str
+    basis: str
     evidence_document_id: str
     evidence_document_version_id: str
     status: FindingStatus

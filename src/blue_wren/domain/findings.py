@@ -32,6 +32,7 @@ class ReportedObservation:
     value: Decimal
     unit: str
     period: str
+    basis: str
     evidence: EvidenceReference
 
 
@@ -41,6 +42,7 @@ class BaselineObservation:
     value: Decimal
     unit: str
     period: str
+    basis: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -51,6 +53,7 @@ class Finding:
     delta: Decimal | None
     unit: str
     period: str
+    basis: str
     evidence: EvidenceReference
     status: FindingStatus
     reason: str | None = None
@@ -78,6 +81,7 @@ def compare_observations(
             delta=None,
             unit=actual.unit,
             period=actual.period,
+            basis=actual.basis,
             evidence=actual.evidence,
             status=FindingStatus.UNRESOLVED,
             reason=mismatch,
@@ -96,6 +100,7 @@ def compare_observations(
             delta=None,
             unit=actual.unit,
             period=actual.period,
+            basis=actual.basis,
             evidence=actual.evidence,
             status=FindingStatus.UNRESOLVED,
             reason="unit_mismatch",
@@ -108,6 +113,7 @@ def compare_observations(
         delta=actual.value - normalized_baseline,
         unit=actual.unit,
         period=actual.period,
+        basis=actual.basis,
         evidence=actual.evidence,
         status=FindingStatus.PROPOSED,
         baseline_normalization=(
@@ -131,4 +137,6 @@ def _comparison_mismatch(
         return "metric_mismatch"
     if actual.period != baseline.period:
         return "period_mismatch"
+    if actual.basis != baseline.basis:
+        return "basis_mismatch"
     return None

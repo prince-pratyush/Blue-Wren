@@ -68,6 +68,7 @@ def _mismatches(expected: ExpectedFinding, emitted: Finding) -> tuple[str, ...]:
         ("delta", expected.delta == emitted.delta),
         ("unit", expected.unit == emitted.unit),
         ("period", expected.period == emitted.period),
+        ("basis", expected.basis == emitted.basis),
         (
             "evidence document",
             expected.evidence_document_id == emitted.evidence.document_id,

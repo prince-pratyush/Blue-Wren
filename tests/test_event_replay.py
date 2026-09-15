@@ -20,6 +20,7 @@ def test_replay_produces_an_evidence_linked_variance() -> None:
     assert finding.delta == Decimal("5.0")
     assert finding.unit == "AUD_millions"
     assert finding.period == "2026-Q2"
+    assert finding.basis == "reported"
     assert finding.status is FindingStatus.PROPOSED
     assert finding.evidence.document_id == "acme-q2-results"
     assert finding.evidence.document_version_id == "acme-q2-results:version-1"
@@ -38,6 +39,7 @@ def test_replay_marks_different_periods_as_unresolved(tmp_path: Path) -> None:
             "value": "125.0",
             "unit": "AUD_millions",
             "period": "2026-Q2",
+            "basis": "reported",
             "evidence": {
               "document_id": "acme-q2-results",
               "document_version_id": "acme-q2-results:version-1",
@@ -48,7 +50,8 @@ def test_replay_marks_different_periods_as_unresolved(tmp_path: Path) -> None:
             "metric": "revenue",
             "value": "120.0",
             "unit": "AUD_millions",
-            "period": "2026-Q1"
+            "period": "2026-Q1",
+            "basis": "reported"
           }
         }
         """,
@@ -73,7 +76,8 @@ def test_replay_rejects_an_actual_without_evidence(tmp_path: Path) -> None:
             "metric": "revenue",
             "value": "125.0",
             "unit": "AUD_millions",
-            "period": "2026-Q2"
+            "period": "2026-Q2",
+            "basis": "reported"
           },
           "baseline": {
             "metric": "revenue",

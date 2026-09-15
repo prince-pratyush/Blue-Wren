@@ -7,6 +7,7 @@
       "delta": "5.0",
       "unit": "AUD_millions",
       "period": "2026-Q2",
+      "basis": "reported",
       "evidence_document_id": "acme-q2-results",
       "evidence_document_version_id": "acme-q2-results:version-1",
       "status": "proposed"

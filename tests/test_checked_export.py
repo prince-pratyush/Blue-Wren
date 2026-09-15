@@ -28,6 +28,7 @@ def history(
         delta=Decimal("5.0") if status is FindingStatus.PROPOSED else None,
         unit="AUD_millions",
         period="2026-Q2",
+        basis="reported",
         evidence=EvidenceReference(
             document_id="acme-q2-results",
             document_version_id="acme-q2-results:version-1",

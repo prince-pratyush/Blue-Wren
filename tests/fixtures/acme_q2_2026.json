@@ -6,6 +6,7 @@
     "value": "125.0",
     "unit": "AUD_millions",
     "period": "2026-Q2",
+    "basis": "reported",
     "evidence": {
       "document_id": "acme-q2-results",
       "document_version_id": "acme-q2-results:version-1",
@@ -16,6 +17,7 @@
     "metric": "revenue",
     "value": "120.0",
     "unit": "AUD_millions",
-    "period": "2026-Q2"
+    "period": "2026-Q2",
+    "basis": "reported"
   }
 }

@@ -29,6 +29,7 @@ PAYLOAD: dict[str, Any] = {
         "value": "125.0",
         "unit": "AUD_millions",
         "period": "2026-Q2",
+        "basis": "reported",
         "evidence": {
             "document_id": "acme-q2-results",
             "document_version_id": "acme-q2-results:version-1",
@@ -40,6 +41,7 @@ PAYLOAD: dict[str, Any] = {
         "value": "120.0",
         "unit": "AUD_millions",
         "period": "2026-Q2",
+        "basis": "reported",
     },
 }
 
@@ -62,6 +64,7 @@ async def test_event_replay_returns_an_evidence_linked_finding(
                 "delta": "5.0",
                 "unit": "AUD_millions",
                 "period": "2026-Q2",
+                "basis": "reported",
                 "evidence": {
                     "document_id": "acme-q2-results",
                     "document_version_id": "acme-q2-results:version-1",
@@ -113,6 +116,32 @@ async def test_event_replay_normalizes_compatible_financial_scales(
         "normalized_value": "120",
         "normalized_unit": "AUD_millions",
     }
+
+
+@pytest.mark.anyio
+async def test_event_replay_exposes_an_unresolved_basis_mismatch(
+    client: AsyncClient,
+) -> None:
+    payload = deepcopy(PAYLOAD)
+    payload["baseline"]["basis"] = "underlying"
+
+    response = await client.post("/v1/event-replays", json=payload)
+
+    assert response.status_code == 200
+    finding = response.json()["findings"][0]
+    assert finding["status"] == "unresolved"
+    assert finding["basis"] == "reported"
+    assert finding["reason"] == "basis_mismatch"
+
+
+@pytest.mark.anyio
+async def test_event_replay_requires_financial_basis(client: AsyncClient) -> None:
+    payload = deepcopy(PAYLOAD)
+    del payload["baseline"]["basis"]
+
+    response = await client.post("/v1/event-replays", json=payload)
+
+    assert response.status_code == 422
 
 
 @pytest.mark.anyio

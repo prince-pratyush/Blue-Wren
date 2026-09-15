@@ -57,6 +57,7 @@ def create_event_replay(request: EventReplayRequest) -> EventReplayResponse:
         value=request.actual.value,
         unit=request.actual.unit,
         period=request.actual.period,
+        basis=request.actual.basis,
         evidence=EvidenceReference(
             document_id=request.actual.evidence.document_id,
             document_version_id=request.actual.evidence.document_version_id,
@@ -68,6 +69,7 @@ def create_event_replay(request: EventReplayRequest) -> EventReplayResponse:
         value=request.baseline.value,
         unit=request.baseline.unit,
         period=request.baseline.period,
+        basis=request.baseline.basis,
     )
     result = replay_event(
         event_id=request.event_id,

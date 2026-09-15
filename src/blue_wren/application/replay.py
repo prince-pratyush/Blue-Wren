@@ -44,6 +44,7 @@ def replay_event_fixture(path: Path) -> EventReplayResult:
         value=Decimal(actual_payload["value"]),
         unit=actual_payload["unit"],
         period=actual_payload["period"],
+        basis=actual_payload["basis"],
         evidence=EvidenceReference(
             document_id=evidence_payload["document_id"],
             document_version_id=evidence_payload["document_version_id"],
@@ -55,6 +56,7 @@ def replay_event_fixture(path: Path) -> EventReplayResult:
         value=Decimal(baseline_payload["value"]),
         unit=baseline_payload["unit"],
         period=baseline_payload["period"],
+        basis=baseline_payload["basis"],
     )
 
     return replay_event(
