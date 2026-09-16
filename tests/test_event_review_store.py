@@ -7,14 +7,23 @@ from blue_wren.application.event_review import decide_event_finding, start_event
 from blue_wren.application.replay import replay_event_fixture
 from blue_wren.application.review_store import (
     EventReviewNotFound,
+    EventReviewRepository,
     EventReviewStoreConflict,
 )
 from blue_wren.domain.event_review import EventReviewSession
 from blue_wren.domain.review import ReviewOutcome
 from blue_wren.infrastructure.memory_review_store import InMemoryEventReviewRepository
+from blue_wren.infrastructure.sqlite_review_store import SqliteEventReviewRepository
 
 FIXTURE = Path(__file__).parent / "fixtures" / "acme_q2_2026.json"
 NOW = datetime(2026, 9, 16, 1, 0, tzinfo=UTC)
+
+
+@pytest.fixture(params=["memory", "sqlite"])
+def repository(request: pytest.FixtureRequest, tmp_path: Path) -> EventReviewRepository:
+    if request.param == "memory":
+        return InMemoryEventReviewRepository()
+    return SqliteEventReviewRepository(tmp_path / "reviews.db")
 
 
 def _session() -> EventReviewSession:
@@ -34,8 +43,7 @@ def _decide(
     )
 
 
-def test_create_then_get_returns_first_revision() -> None:
-    repository = InMemoryEventReviewRepository()
+def test_create_then_get_returns_first_revision(repository: EventReviewRepository) -> None:
     session = _session()
 
     stored = repository.create(session)
@@ -45,8 +53,7 @@ def test_create_then_get_returns_first_revision() -> None:
     assert repository.get(session.event_id) == stored
 
 
-def test_create_rejects_an_existing_event() -> None:
-    repository = InMemoryEventReviewRepository()
+def test_create_rejects_an_existing_event(repository: EventReviewRepository) -> None:
     session = _session()
     repository.create(session)
 
@@ -54,15 +61,13 @@ def test_create_rejects_an_existing_event() -> None:
         repository.create(session)
 
 
-def test_get_unknown_event_raises_not_found() -> None:
-    repository = InMemoryEventReviewRepository()
+def test_get_unknown_event_raises_not_found(repository: EventReviewRepository) -> None:
 
     with pytest.raises(EventReviewNotFound, match="missing"):
         repository.get("missing")
 
 
-def test_update_with_current_revision_persists_decision() -> None:
-    repository = InMemoryEventReviewRepository()
+def test_update_with_current_revision_persists_decision(repository: EventReviewRepository) -> None:
     session = _session()
     stored = repository.create(session)
     reviewed = _decide(session, ReviewOutcome.ACCEPTED, "analyst-7")
@@ -75,8 +80,9 @@ def test_update_with_current_revision_persists_decision() -> None:
     )
 
 
-def test_update_with_stale_revision_is_rejected_and_keeps_stored_state() -> None:
-    repository = InMemoryEventReviewRepository()
+def test_update_with_stale_revision_is_rejected_and_keeps_stored_state(
+    repository: EventReviewRepository,
+) -> None:
     session = _session()
     repository.create(session)
     accepted = _decide(session, ReviewOutcome.ACCEPTED, "analyst-7")
@@ -91,8 +97,23 @@ def test_update_with_stale_revision_is_rejected_and_keeps_stored_state() -> None
     assert stored.session.findings[0].current_outcome is ReviewOutcome.ACCEPTED
 
 
-def test_update_unknown_event_raises_not_found() -> None:
-    repository = InMemoryEventReviewRepository()
+def test_update_unknown_event_raises_not_found(repository: EventReviewRepository) -> None:
 
     with pytest.raises(EventReviewNotFound):
         repository.update(_session(), expected_revision=1)
+
+
+def test_sqlite_state_survives_reopen(tmp_path: Path) -> None:
+    path = tmp_path / "reviews.db"
+    first = SqliteEventReviewRepository(path)
+    session = _session()
+    first.update(
+        _decide(session, ReviewOutcome.DEFERRED, "analyst-7"),
+        expected_revision=first.create(session).revision,
+    )
+    first.close()
+
+    stored = SqliteEventReviewRepository(path).get(session.event_id)
+
+    assert stored.revision == 2
+    assert stored.session.findings[0].current_outcome is ReviewOutcome.DEFERRED
