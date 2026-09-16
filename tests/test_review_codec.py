@@ -80,7 +80,7 @@ def test_round_trip_preserves_decimal_text_and_normalization() -> None:
     baseline = BaselineObservation(
         "revenue", Decimal("120000"), "AUD_thousands", "2026-Q2", "reported"
     )
-    replay = replay_event(event_id="e", company_id="c", actual=actual, baseline=baseline)
+    replay = replay_event(event_id="e", company_id="c", comparisons=((actual, baseline),))
     session = start_event_review(replay, created_at=NOW)
 
     decoded = decode_session(encode_session(session))

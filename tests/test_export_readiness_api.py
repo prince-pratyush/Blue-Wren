@@ -11,25 +11,29 @@ from blue_wren.infrastructure.memory_evidence_store import InMemoryEvidenceVersi
 PAYLOAD: dict[str, Any] = {
     "event_id": "acme-q2-2026",
     "company_id": "ACME-AU",
-    "actual": {
-        "metric": "revenue",
-        "value": "125.0",
-        "unit": "AUD_millions",
-        "period": "2026-Q2",
-        "basis": "reported",
-        "evidence": {
-            "document_id": "acme-q2-results",
-            "document_version_id": "acme-q2-results:version-1",
-            "locator": "page=2;table=results;row=revenue",
-        },
-    },
-    "baseline": {
-        "metric": "revenue",
-        "value": "120.0",
-        "unit": "AUD_millions",
-        "period": "2026-Q2",
-        "basis": "reported",
-    },
+    "comparisons": [
+        {
+            "actual": {
+                "metric": "revenue",
+                "value": "125.0",
+                "unit": "AUD_millions",
+                "period": "2026-Q2",
+                "basis": "reported",
+                "evidence": {
+                    "document_id": "acme-q2-results",
+                    "document_version_id": "acme-q2-results:version-1",
+                    "locator": "page=2;table=results;row=revenue",
+                },
+            },
+            "baseline": {
+                "metric": "revenue",
+                "value": "120.0",
+                "unit": "AUD_millions",
+                "period": "2026-Q2",
+                "basis": "reported",
+            },
+        }
+    ],
 }
 
 URL = "/v1/event-reviews/acme-q2-2026/export-readiness"
@@ -100,7 +104,7 @@ async def test_accepted_review_allows_export(client: AsyncClient) -> None:
 @pytest.mark.anyio
 async def test_unresolved_finding_blocks_export(client: AsyncClient) -> None:
     payload = deepcopy(PAYLOAD)
-    payload["baseline"]["period"] = "2026-Q1"
+    payload["comparisons"][0]["baseline"]["period"] = "2026-Q1"
     finding_id = await _create(client, payload)
 
     response = await client.get(URL)

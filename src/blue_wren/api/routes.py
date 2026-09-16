@@ -12,6 +12,7 @@ from blue_wren.api.schemas import (
     ExportBlockerResponse,
     ExportReadinessResponse,
     FindingResponse,
+    ObservationComparisonRequest,
     ReviewDecisionRequest,
     ReviewedFindingResponse,
 )
@@ -125,7 +126,12 @@ def create_event_review(
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(error)
         ) from error
-    session = start_event_review(replay, created_at=datetime.now(UTC))
+    try:
+        session = start_event_review(replay, created_at=datetime.now(UTC))
+    except EventReviewError as error:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(error)
+        ) from error
     try:
         stored = repository.create(session)
     except EventReviewStoreConflict as error:
@@ -181,9 +187,7 @@ def get_export_readiness(
         event_id=event_id,
         revision=stored.revision,
         allowed=readiness.allowed,
-        blockers=[
-            ExportBlockerResponse.model_validate(blocker) for blocker in readiness.blockers
-        ],
+        blockers=[ExportBlockerResponse.model_validate(blocker) for blocker in readiness.blockers],
     )
 
 
@@ -225,9 +229,7 @@ def create_review_decision(
     return _review_response(updated)
 
 
-def _require_ingested(
-    repository: EvidenceVersionRepository, reference: EvidenceReference
-) -> None:
+def _require_ingested(repository: EvidenceVersionRepository, reference: EvidenceReference) -> None:
     version = repository.get(reference.document_version_id)
     if version.document_id != reference.document_id:
         raise EvidenceIntakeError(
@@ -255,28 +257,33 @@ def _review_response(stored: StoredEventReview) -> EventReviewResponse:
 
 
 def _replay(request: EventReplayRequest) -> EventReplayResult:
-    actual = ReportedObservation(
-        metric=request.actual.metric,
-        value=request.actual.value,
-        unit=request.actual.unit,
-        period=request.actual.period,
-        basis=request.actual.basis,
-        evidence=EvidenceReference(
-            document_id=request.actual.evidence.document_id,
-            document_version_id=request.actual.evidence.document_version_id,
-            locator=request.actual.evidence.locator,
-        ),
-    )
-    baseline = BaselineObservation(
-        metric=request.baseline.metric,
-        value=request.baseline.value,
-        unit=request.baseline.unit,
-        period=request.baseline.period,
-        basis=request.baseline.basis,
-    )
     return replay_event(
         event_id=request.event_id,
         company_id=request.company_id,
-        actual=actual,
-        baseline=baseline,
+        comparisons=tuple(_comparison(item) for item in request.comparisons),
     )
+
+
+def _comparison(
+    item: ObservationComparisonRequest,
+) -> tuple[ReportedObservation, BaselineObservation]:
+    actual = ReportedObservation(
+        metric=item.actual.metric,
+        value=item.actual.value,
+        unit=item.actual.unit,
+        period=item.actual.period,
+        basis=item.actual.basis,
+        evidence=EvidenceReference(
+            document_id=item.actual.evidence.document_id,
+            document_version_id=item.actual.evidence.document_version_id,
+            locator=item.actual.evidence.locator,
+        ),
+    )
+    baseline = BaselineObservation(
+        metric=item.baseline.metric,
+        value=item.baseline.value,
+        unit=item.baseline.unit,
+        period=item.baseline.period,
+        basis=item.baseline.basis,
+    )
+    return actual, baseline

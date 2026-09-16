@@ -123,7 +123,7 @@ def test_evaluation_rejects_expected_evidence_outside_manifest(tmp_path: Path) -
 def test_evaluation_rejects_emitted_evidence_outside_manifest(tmp_path: Path) -> None:
     event_path = tmp_path / "unknown-source.json"
     payload = json.loads(EVENT.read_text(encoding="utf-8"))
-    payload["actual"]["evidence"]["document_version_id"] = "unlisted-version"
+    payload["comparisons"][0]["actual"]["evidence"]["document_version_id"] = "unlisted-version"
     event_path.write_text(json.dumps(payload), encoding="utf-8")
 
     with pytest.raises(EvaluationFixtureError, match="emitted evidence is not in source manifest"):

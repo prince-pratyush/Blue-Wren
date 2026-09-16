@@ -11,25 +11,29 @@ from blue_wren.infrastructure.memory_evidence_store import InMemoryEvidenceVersi
 PAYLOAD: dict[str, Any] = {
     "event_id": "acme-q2-2026",
     "company_id": "ACME-AU",
-    "actual": {
-        "metric": "revenue",
-        "value": "125.0",
-        "unit": "AUD_millions",
-        "period": "2026-Q2",
-        "basis": "reported",
-        "evidence": {
-            "document_id": "acme-q2-results",
-            "document_version_id": "acme-q2-results:version-1",
-            "locator": "page=2;table=results;row=revenue",
-        },
-    },
-    "baseline": {
-        "metric": "revenue",
-        "value": "120.0",
-        "unit": "AUD_millions",
-        "period": "2026-Q2",
-        "basis": "reported",
-    },
+    "comparisons": [
+        {
+            "actual": {
+                "metric": "revenue",
+                "value": "125.0",
+                "unit": "AUD_millions",
+                "period": "2026-Q2",
+                "basis": "reported",
+                "evidence": {
+                    "document_id": "acme-q2-results",
+                    "document_version_id": "acme-q2-results:version-1",
+                    "locator": "page=2;table=results;row=revenue",
+                },
+            },
+            "baseline": {
+                "metric": "revenue",
+                "value": "120.0",
+                "unit": "AUD_millions",
+                "period": "2026-Q2",
+                "basis": "reported",
+            },
+        }
+    ],
 }
 
 DECISION: dict[str, Any] = {
@@ -107,7 +111,7 @@ async def test_decision_rejects_already_reviewed_finding(client: AsyncClient) ->
 @pytest.mark.anyio
 async def test_decision_cannot_accept_unresolved_finding(client: AsyncClient) -> None:
     payload = deepcopy(PAYLOAD)
-    payload["baseline"]["basis"] = "underlying"
+    payload["comparisons"][0]["baseline"]["basis"] = "underlying"
     finding_id = await _create(client, payload)
 
     response = await client.post(_url(finding_id), json=DECISION)

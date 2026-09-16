@@ -37,11 +37,15 @@ class BaselineObservationRequest(BaseModel):
     basis: Identifier
 
 
+class ObservationComparisonRequest(BaseModel):
+    actual: ReportedObservationRequest
+    baseline: BaselineObservationRequest
+
+
 class EventReplayRequest(BaseModel):
     event_id: Identifier
     company_id: Identifier
-    actual: ReportedObservationRequest
-    baseline: BaselineObservationRequest
+    comparisons: Annotated[list[ObservationComparisonRequest], Field(min_length=1, max_length=500)]
 
 
 class EvidenceReferenceResponse(BaseModel):
