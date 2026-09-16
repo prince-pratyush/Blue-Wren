@@ -5,6 +5,7 @@ from typing import Annotated, Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from blue_wren.domain.evidence import RightsBasis
+from blue_wren.domain.exporting import ExportBlockerCode
 from blue_wren.domain.review import ReviewOutcome
 
 Identifier = Annotated[str, Field(min_length=1, max_length=128)]
@@ -104,6 +105,20 @@ class EventReviewResponse(BaseModel):
     company_id: str
     revision: int
     findings: list[ReviewedFindingResponse]
+
+
+class ExportBlockerResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    finding_id: str
+    code: ExportBlockerCode
+
+
+class ExportReadinessResponse(BaseModel):
+    event_id: str
+    revision: int
+    allowed: bool
+    blockers: list[ExportBlockerResponse]
 
 
 class DocumentVersionResponse(BaseModel):

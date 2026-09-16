@@ -8,6 +8,8 @@ from blue_wren.api.schemas import (
     EventReplayRequest,
     EventReplayResponse,
     EventReviewResponse,
+    ExportBlockerResponse,
+    ExportReadinessResponse,
     FindingResponse,
     ReviewDecisionRequest,
     ReviewedFindingResponse,
@@ -18,6 +20,7 @@ from blue_wren.application.event_review import (
     start_event_review,
 )
 from blue_wren.application.evidence import DEFAULT_MAX_BYTES, ingest_evidence
+from blue_wren.application.exporting import assess_checked_export
 from blue_wren.application.replay import replay_event
 from blue_wren.application.review_store import (
     EventReviewNotFound,
@@ -104,6 +107,29 @@ def get_event_review(
     except EventReviewNotFound as error:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(error)) from error
     return _review_response(stored)
+
+
+@router.get(
+    "/event-reviews/{event_id}/export-readiness",
+    response_model=ExportReadinessResponse,
+)
+def get_export_readiness(
+    event_id: str,
+    repository: Annotated[EventReviewRepository, Depends(_event_reviews)],
+) -> ExportReadinessResponse:
+    try:
+        stored = repository.get(event_id)
+    except EventReviewNotFound as error:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(error)) from error
+    readiness = assess_checked_export(stored.session.findings)
+    return ExportReadinessResponse(
+        event_id=event_id,
+        revision=stored.revision,
+        allowed=readiness.allowed,
+        blockers=[
+            ExportBlockerResponse.model_validate(blocker) for blocker in readiness.blockers
+        ],
+    )
 
 
 @router.post(
