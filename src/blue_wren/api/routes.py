@@ -1,23 +1,39 @@
 from datetime import UTC, datetime
 from typing import Annotated
 
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, status
 
 from blue_wren.api.schemas import (
     DocumentVersionResponse,
     EventReplayRequest,
     EventReplayResponse,
+    EventReviewResponse,
+    FindingResponse,
+    ReviewedFindingResponse,
 )
+from blue_wren.application.event_review import start_event_review
 from blue_wren.application.evidence import DEFAULT_MAX_BYTES, ingest_evidence
 from blue_wren.application.replay import replay_event
+from blue_wren.application.review_store import (
+    EventReviewNotFound,
+    EventReviewRepository,
+    EventReviewStoreConflict,
+    StoredEventReview,
+)
 from blue_wren.domain.evidence import EvidenceIntakeError, RightsBasis
 from blue_wren.domain.findings import (
     BaselineObservation,
+    EventReplayResult,
     EvidenceReference,
     ReportedObservation,
 )
 
 router = APIRouter()
+
+
+def _event_reviews(request: Request) -> EventReviewRepository:
+    repository: EventReviewRepository = request.app.state.event_reviews
+    return repository
 
 
 @router.post(
@@ -52,6 +68,57 @@ async def create_evidence_version(
 
 @router.post("/event-replays", response_model=EventReplayResponse)
 def create_event_replay(request: EventReplayRequest) -> EventReplayResponse:
+    return EventReplayResponse.model_validate(_replay(request))
+
+
+@router.post(
+    "/event-reviews",
+    response_model=EventReviewResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_event_review(
+    request: EventReplayRequest,
+    repository: Annotated[EventReviewRepository, Depends(_event_reviews)],
+) -> EventReviewResponse:
+    session = start_event_review(_replay(request), created_at=datetime.now(UTC))
+    try:
+        stored = repository.create(session)
+    except EventReviewStoreConflict as error:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(error)) from error
+    return _review_response(stored)
+
+
+@router.get("/event-reviews/{event_id}", response_model=EventReviewResponse)
+def get_event_review(
+    event_id: str,
+    repository: Annotated[EventReviewRepository, Depends(_event_reviews)],
+) -> EventReviewResponse:
+    try:
+        stored = repository.get(event_id)
+    except EventReviewNotFound as error:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(error)) from error
+    return _review_response(stored)
+
+
+def _review_response(stored: StoredEventReview) -> EventReviewResponse:
+    session = stored.session
+    return EventReviewResponse(
+        event_id=session.event_id,
+        company_id=session.company_id,
+        revision=stored.revision,
+        findings=[
+            ReviewedFindingResponse(
+                finding_id=history.current_revision.finding_id,
+                version=history.current_revision.version,
+                outcome=history.current_outcome,
+                finding=FindingResponse.model_validate(history.current_revision.finding),
+            )
+            for history in session.findings
+        ],
+    )
+
+
+def _replay(request: EventReplayRequest) -> EventReplayResult:
     actual = ReportedObservation(
         metric=request.actual.metric,
         value=request.actual.value,
@@ -71,10 +138,9 @@ def create_event_replay(request: EventReplayRequest) -> EventReplayResponse:
         period=request.baseline.period,
         basis=request.baseline.basis,
     )
-    result = replay_event(
+    return replay_event(
         event_id=request.event_id,
         company_id=request.company_id,
         actual=actual,
         baseline=baseline,
     )
-    return EventReplayResponse.model_validate(result)

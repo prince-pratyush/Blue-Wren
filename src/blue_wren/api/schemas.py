@@ -5,6 +5,7 @@ from typing import Annotated, Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from blue_wren.domain.evidence import RightsBasis
+from blue_wren.domain.review import ReviewOutcome
 
 Identifier = Annotated[str, Field(min_length=1, max_length=128)]
 EvidenceVersionIdentifier = Annotated[str, Field(min_length=1, max_length=256)]
@@ -81,6 +82,20 @@ class EventReplayResponse(BaseModel):
     event_id: str
     company_id: str
     findings: list[FindingResponse]
+
+
+class ReviewedFindingResponse(BaseModel):
+    finding_id: str
+    version: int
+    outcome: ReviewOutcome
+    finding: FindingResponse
+
+
+class EventReviewResponse(BaseModel):
+    event_id: str
+    company_id: str
+    revision: int
+    findings: list[ReviewedFindingResponse]
 
 
 class DocumentVersionResponse(BaseModel):
