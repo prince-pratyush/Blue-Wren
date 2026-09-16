@@ -6,6 +6,7 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 
 from blue_wren.api.main import create_app
+from blue_wren.infrastructure.memory_evidence_store import InMemoryEvidenceVersionRepository
 
 
 @pytest.fixture
@@ -14,9 +15,11 @@ def anyio_backend() -> str:
 
 
 @pytest.fixture
-async def client() -> AsyncIterator[AsyncClient]:
+async def client(
+    evidence_versions: InMemoryEvidenceVersionRepository,
+) -> AsyncIterator[AsyncClient]:
     async with AsyncClient(
-        transport=ASGITransport(app=create_app()),
+        transport=ASGITransport(app=create_app(evidence_versions=evidence_versions)),
         base_url="http://test",
     ) as test_client:
         yield test_client
@@ -84,6 +87,30 @@ async def test_create_event_review_rejects_duplicate_event(client: AsyncClient) 
 
     assert response.status_code == 409
     assert "already exists" in response.json()["detail"]
+
+
+@pytest.mark.anyio
+async def test_create_event_review_rejects_uningested_evidence(client: AsyncClient) -> None:
+    payload = deepcopy(PAYLOAD)
+    payload["actual"]["evidence"]["document_version_id"] = "acme-q2-results:version-9"
+
+    response = await client.post("/v1/event-reviews", json=payload)
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == "evidence version not found: acme-q2-results:version-9"
+
+
+@pytest.mark.anyio
+async def test_create_event_review_rejects_evidence_from_another_document(
+    client: AsyncClient,
+) -> None:
+    payload = deepcopy(PAYLOAD)
+    payload["actual"]["evidence"]["document_id"] = "acme-q1-results"
+
+    response = await client.post("/v1/event-reviews", json=payload)
+
+    assert response.status_code == 422
+    assert "acme-q1-results" in response.json()["detail"]
 
 
 @pytest.mark.anyio

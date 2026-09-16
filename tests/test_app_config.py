@@ -1,3 +1,4 @@
+from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
@@ -68,7 +69,20 @@ async def test_reviews_survive_app_restart_with_sqlite(
     async with AsyncClient(
         transport=ASGITransport(app=create_app()), base_url="http://test"
     ) as first:
-        created = await first.post("/v1/event-reviews", json=PAYLOAD)
+        ingested = await first.post(
+            "/v1/evidence/versions",
+            data={
+                "document_id": "acme-q2-results",
+                "source_name": "ACME investor relations",
+                "rights_basis": "public",
+                "published_at": "2026-08-20T08:00:00Z",
+                "available_at": "2026-08-20T08:01:00Z",
+            },
+            files={"file": ("results.pdf", b"%PDF-1.7\nQuarterly results", "application/pdf")},
+        )
+        payload = deepcopy(PAYLOAD)
+        payload["actual"]["evidence"]["document_version_id"] = ingested.json()["version_id"]
+        created = await first.post("/v1/event-reviews", json=payload)
         assert created.status_code == 201
 
     async with AsyncClient(

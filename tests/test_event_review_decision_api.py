@@ -6,6 +6,7 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 
 from blue_wren.api.main import create_app
+from blue_wren.infrastructure.memory_evidence_store import InMemoryEvidenceVersionRepository
 
 PAYLOAD: dict[str, Any] = {
     "event_id": "acme-q2-2026",
@@ -45,9 +46,11 @@ def anyio_backend() -> str:
 
 
 @pytest.fixture
-async def client() -> AsyncIterator[AsyncClient]:
+async def client(
+    evidence_versions: InMemoryEvidenceVersionRepository,
+) -> AsyncIterator[AsyncClient]:
     async with AsyncClient(
-        transport=ASGITransport(app=create_app()),
+        transport=ASGITransport(app=create_app(evidence_versions=evidence_versions)),
         base_url="http://test",
     ) as test_client:
         yield test_client
