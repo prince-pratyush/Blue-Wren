@@ -1,4 +1,11 @@
 from dataclasses import dataclass
+from enum import StrEnum
+
+
+class ExtractionStatus(StrEnum):
+    EXTRACTED = "extracted"
+    FAILED = "failed"
+    UNSUPPORTED = "unsupported"
 
 
 class ExtractionError(ValueError):
@@ -24,3 +31,12 @@ class ExtractedDocument:
     media_type: str
     page_count: int
     spans: tuple[TextSpan, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class ExtractionRecord:
+    document_version_id: str
+    status: ExtractionStatus
+    page_count: int | None
+    spans: tuple[TextSpan, ...]
+    reason: str | None = None
