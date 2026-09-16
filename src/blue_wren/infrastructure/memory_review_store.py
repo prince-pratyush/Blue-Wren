@@ -16,6 +16,9 @@ class InMemoryEventReviewRepository:
         except KeyError as error:
             raise EventReviewNotFound(f"event review not found: {event_id}") from error
 
+    def list(self) -> tuple[StoredEventReview, ...]:
+        return tuple(self._records[event_id] for event_id in sorted(self._records))
+
     def create(self, session: EventReviewSession) -> StoredEventReview:
         if session.event_id in self._records:
             raise EventReviewStoreConflict(f"event review already exists: {session.event_id}")

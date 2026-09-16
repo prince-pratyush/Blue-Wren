@@ -1,3 +1,4 @@
+from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -98,9 +99,24 @@ def test_update_with_stale_revision_is_rejected_and_keeps_stored_state(
 
 
 def test_update_unknown_event_raises_not_found(repository: EventReviewRepository) -> None:
-
     with pytest.raises(EventReviewNotFound):
         repository.update(_session(), expected_revision=1)
+
+
+def test_list_is_empty_for_a_new_repository(repository: EventReviewRepository) -> None:
+    assert repository.list() == ()
+
+
+def test_list_returns_reviews_ordered_by_event_id(repository: EventReviewRepository) -> None:
+    acme = _session()
+    zeta = replace(acme, event_id="zeta-q2-2026")
+    repository.create(zeta)
+    repository.create(acme)
+
+    listed = repository.list()
+
+    assert [stored.session.event_id for stored in listed] == ["acme-q2-2026", "zeta-q2-2026"]
+    assert listed[0] == repository.get("acme-q2-2026")
 
 
 def test_sqlite_state_survives_reopen(tmp_path: Path) -> None:
