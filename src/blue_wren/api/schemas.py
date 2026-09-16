@@ -84,6 +84,14 @@ class EventReplayResponse(BaseModel):
     findings: list[FindingResponse]
 
 
+class ReviewDecisionRequest(BaseModel):
+    expected_revision: Annotated[int, Field(ge=1)]
+    expected_version: Annotated[int, Field(ge=1)]
+    outcome: Literal["accepted", "rejected", "deferred"]
+    reviewer_id: Identifier
+    reason: Annotated[str, Field(max_length=2000)] | None = None
+
+
 class ReviewedFindingResponse(BaseModel):
     finding_id: str
     version: int

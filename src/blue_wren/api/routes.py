@@ -9,9 +9,14 @@ from blue_wren.api.schemas import (
     EventReplayResponse,
     EventReviewResponse,
     FindingResponse,
+    ReviewDecisionRequest,
     ReviewedFindingResponse,
 )
-from blue_wren.application.event_review import start_event_review
+from blue_wren.application.event_review import (
+    EventReviewError,
+    decide_event_finding,
+    start_event_review,
+)
 from blue_wren.application.evidence import DEFAULT_MAX_BYTES, ingest_evidence
 from blue_wren.application.replay import replay_event
 from blue_wren.application.review_store import (
@@ -27,6 +32,7 @@ from blue_wren.domain.findings import (
     EvidenceReference,
     ReportedObservation,
 )
+from blue_wren.domain.review import ReviewConflict, ReviewOutcome, ReviewValidationError
 
 router = APIRouter()
 
@@ -98,6 +104,44 @@ def get_event_review(
     except EventReviewNotFound as error:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(error)) from error
     return _review_response(stored)
+
+
+@router.post(
+    "/event-reviews/{event_id}/findings/{finding_id}/decisions",
+    response_model=EventReviewResponse,
+)
+def create_review_decision(
+    event_id: str,
+    finding_id: str,
+    request: ReviewDecisionRequest,
+    repository: Annotated[EventReviewRepository, Depends(_event_reviews)],
+) -> EventReviewResponse:
+    try:
+        stored = repository.get(event_id)
+        if stored.revision != request.expected_revision:
+            raise EventReviewStoreConflict(
+                f"expected revision {request.expected_revision}, "
+                f"current revision is {stored.revision}"
+            )
+        session = decide_event_finding(
+            stored.session,
+            finding_id=finding_id,
+            expected_version=request.expected_version,
+            outcome=ReviewOutcome(request.outcome),
+            reviewer_id=request.reviewer_id,
+            decided_at=datetime.now(UTC),
+            reason=request.reason,
+        )
+        updated = repository.update(session, expected_revision=request.expected_revision)
+    except (EventReviewNotFound, EventReviewError) as error:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(error)) from error
+    except (EventReviewStoreConflict, ReviewConflict) as error:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(error)) from error
+    except ReviewValidationError as error:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(error)
+        ) from error
+    return _review_response(updated)
 
 
 def _review_response(stored: StoredEventReview) -> EventReviewResponse:
