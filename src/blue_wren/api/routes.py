@@ -115,8 +115,17 @@ def create_event_replay(request: EventReplayRequest) -> EventReplayResponse:
 def create_event_review(
     request: EventReplayRequest,
     repository: Annotated[EventReviewRepository, Depends(_event_reviews)],
+    evidence: Annotated[EvidenceVersionRepository, Depends(_evidence_versions)],
 ) -> EventReviewResponse:
-    session = start_event_review(_replay(request), created_at=datetime.now(UTC))
+    replay = _replay(request)
+    try:
+        for finding in replay.findings:
+            _require_ingested(evidence, finding.evidence)
+    except (EvidenceVersionNotFound, EvidenceIntakeError) as error:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(error)
+        ) from error
+    session = start_event_review(replay, created_at=datetime.now(UTC))
     try:
         stored = repository.create(session)
     except EventReviewStoreConflict as error:
@@ -214,6 +223,17 @@ def create_review_decision(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(error)
         ) from error
     return _review_response(updated)
+
+
+def _require_ingested(
+    repository: EvidenceVersionRepository, reference: EvidenceReference
+) -> None:
+    version = repository.get(reference.document_version_id)
+    if version.document_id != reference.document_id:
+        raise EvidenceIntakeError(
+            f"evidence version {reference.document_version_id} belongs to "
+            f"{version.document_id}, not {reference.document_id}"
+        )
 
 
 def _review_response(stored: StoredEventReview) -> EventReviewResponse:
