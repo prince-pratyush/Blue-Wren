@@ -1,3 +1,5 @@
+from dataclasses import replace
+
 from blue_wren.application.evidence_store import (
     EvidenceVersionConflict,
     EvidenceVersionNotFound,
@@ -20,7 +22,7 @@ class InMemoryEvidenceVersionRepository:
         if existing is None:
             self._versions[version.version_id] = version
             return version
-        if existing != version:
+        if replace(version, ingested_at=existing.ingested_at) != existing:
             raise EvidenceVersionConflict(
                 f"evidence version already exists with different metadata: {version.version_id}"
             )

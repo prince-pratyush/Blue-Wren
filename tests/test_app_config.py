@@ -5,7 +5,9 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 
 from blue_wren.api.main import create_app
+from blue_wren.infrastructure.memory_evidence_store import InMemoryEvidenceVersionRepository
 from blue_wren.infrastructure.memory_review_store import InMemoryEventReviewRepository
+from blue_wren.infrastructure.sqlite_evidence_store import SqliteEvidenceVersionRepository
 from blue_wren.infrastructure.sqlite_review_store import SqliteEventReviewRepository
 
 PAYLOAD: dict[str, Any] = {
@@ -38,15 +40,16 @@ def anyio_backend() -> str:
     return "asyncio"
 
 
-def test_app_defaults_to_memory_store(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_app_defaults_to_memory_stores(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("BLUE_WREN_DB", raising=False)
 
     app = create_app()
 
     assert isinstance(app.state.event_reviews, InMemoryEventReviewRepository)
+    assert isinstance(app.state.evidence_versions, InMemoryEvidenceVersionRepository)
 
 
-def test_app_uses_sqlite_store_when_configured(
+def test_app_uses_sqlite_stores_when_configured(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     monkeypatch.setenv("BLUE_WREN_DB", str(tmp_path / "reviews.db"))
@@ -54,6 +57,7 @@ def test_app_uses_sqlite_store_when_configured(
     app = create_app()
 
     assert isinstance(app.state.event_reviews, SqliteEventReviewRepository)
+    assert isinstance(app.state.evidence_versions, SqliteEvidenceVersionRepository)
 
 
 @pytest.mark.anyio

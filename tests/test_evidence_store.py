@@ -55,6 +55,17 @@ def test_put_is_idempotent_for_identical_versions(
     assert repository.put(version) == version
 
 
+def test_put_keeps_first_ingestion_time_for_identical_content(
+    repository: EvidenceVersionRepository,
+) -> None:
+    version = _version()
+    repository.put(version)
+    later = replace(version, ingested_at=version.ingested_at + timedelta(days=1))
+
+    assert repository.put(later) == version
+    assert repository.get(version.version_id).ingested_at == version.ingested_at
+
+
 def test_put_rejects_conflicting_metadata_for_same_version(
     repository: EvidenceVersionRepository,
 ) -> None:
