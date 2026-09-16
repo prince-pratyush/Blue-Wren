@@ -1,7 +1,9 @@
 .PHONY: api check test eval-smoke
 
+BLUE_WREN_DB ?= blue-wren.db
+
 api:
-	uv run --no-sync uvicorn blue_wren.api.main:app --reload
+	BLUE_WREN_DB=$(BLUE_WREN_DB) uv run --no-sync uvicorn blue_wren.api.main:app --reload
 
 check:
 	uv run --no-sync ruff check .

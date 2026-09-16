@@ -2,6 +2,7 @@
 .env
 .env.*
 !.env.example
+*.db
 .coverage
 .mypy_cache/
 .pytest_cache/
