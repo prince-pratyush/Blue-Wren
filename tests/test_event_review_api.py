@@ -28,25 +28,29 @@ async def client(
 PAYLOAD: dict[str, Any] = {
     "event_id": "acme-q2-2026",
     "company_id": "ACME-AU",
-    "actual": {
-        "metric": "revenue",
-        "value": "125.0",
-        "unit": "AUD_millions",
-        "period": "2026-Q2",
-        "basis": "reported",
-        "evidence": {
-            "document_id": "acme-q2-results",
-            "document_version_id": "acme-q2-results:version-1",
-            "locator": "page=2;table=results;row=revenue",
-        },
-    },
-    "baseline": {
-        "metric": "revenue",
-        "value": "120.0",
-        "unit": "AUD_millions",
-        "period": "2026-Q2",
-        "basis": "reported",
-    },
+    "comparisons": [
+        {
+            "actual": {
+                "metric": "revenue",
+                "value": "125.0",
+                "unit": "AUD_millions",
+                "period": "2026-Q2",
+                "basis": "reported",
+                "evidence": {
+                    "document_id": "acme-q2-results",
+                    "document_version_id": "acme-q2-results:version-1",
+                    "locator": "page=2;table=results;row=revenue",
+                },
+            },
+            "baseline": {
+                "metric": "revenue",
+                "value": "120.0",
+                "unit": "AUD_millions",
+                "period": "2026-Q2",
+                "basis": "reported",
+            },
+        }
+    ],
 }
 
 
@@ -90,9 +94,41 @@ async def test_create_event_review_rejects_duplicate_event(client: AsyncClient) 
 
 
 @pytest.mark.anyio
+async def test_create_event_review_tracks_every_comparison(client: AsyncClient) -> None:
+    payload = deepcopy(PAYLOAD)
+    ebitda = deepcopy(payload["comparisons"][0])
+    ebitda["actual"]["metric"] = "ebitda"
+    ebitda["baseline"]["metric"] = "ebitda"
+    payload["comparisons"].append(ebitda)
+
+    response = await client.post("/v1/event-reviews", json=payload)
+
+    assert response.status_code == 201
+    findings = response.json()["findings"]
+    assert len(findings) == 2
+    assert len({finding["finding_id"] for finding in findings}) == 2
+    listed = await client.get("/v1/event-reviews")
+    assert listed.json()[0]["findings_total"] == 2
+    assert listed.json()[0]["findings_pending"] == 2
+
+
+@pytest.mark.anyio
+async def test_create_event_review_rejects_duplicate_comparisons(client: AsyncClient) -> None:
+    payload = deepcopy(PAYLOAD)
+    payload["comparisons"].append(deepcopy(payload["comparisons"][0]))
+
+    response = await client.post("/v1/event-reviews", json=payload)
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == "duplicate finding identity"
+
+
+@pytest.mark.anyio
 async def test_create_event_review_rejects_uningested_evidence(client: AsyncClient) -> None:
     payload = deepcopy(PAYLOAD)
-    payload["actual"]["evidence"]["document_version_id"] = "acme-q2-results:version-9"
+    payload["comparisons"][0]["actual"]["evidence"]["document_version_id"] = (
+        "acme-q2-results:version-9"
+    )
 
     response = await client.post("/v1/event-reviews", json=payload)
 
@@ -105,7 +141,7 @@ async def test_create_event_review_rejects_evidence_from_another_document(
     client: AsyncClient,
 ) -> None:
     payload = deepcopy(PAYLOAD)
-    payload["actual"]["evidence"]["document_id"] = "acme-q1-results"
+    payload["comparisons"][0]["actual"]["evidence"]["document_id"] = "acme-q1-results"
 
     response = await client.post("/v1/event-reviews", json=payload)
 
@@ -171,7 +207,7 @@ async def test_create_event_review_keeps_unresolved_findings_pending(
     client: AsyncClient,
 ) -> None:
     payload = deepcopy(PAYLOAD)
-    payload["baseline"]["basis"] = "underlying"
+    payload["comparisons"][0]["baseline"]["basis"] = "underlying"
 
     response = await client.post("/v1/event-reviews", json=payload)
 

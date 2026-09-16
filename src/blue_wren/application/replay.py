@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Sequence
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
@@ -15,26 +16,35 @@ from blue_wren.domain.findings import (
     compare_observations,
 )
 
+Comparison = tuple[ReportedObservation, BaselineObservation]
+
 
 def replay_event(
     *,
     event_id: str,
     company_id: str,
-    actual: ReportedObservation,
-    baseline: BaselineObservation,
+    comparisons: Sequence[Comparison],
 ) -> EventReplayResult:
     return EventReplayResult(
         event_id=event_id,
         company_id=company_id,
-        findings=(compare_observations(actual, baseline),),
+        findings=tuple(compare_observations(actual, baseline) for actual, baseline in comparisons),
     )
 
 
 def replay_event_fixture(path: Path) -> EventReplayResult:
-    """Load one event fixture and create a reviewable comparison."""
+    """Load one event fixture and create reviewable comparisons."""
     payload: dict[str, Any] = json.loads(path.read_text(encoding="utf-8"))
-    actual_payload = payload["actual"]
-    baseline_payload = payload["baseline"]
+    return replay_event(
+        event_id=payload["event_id"],
+        company_id=payload["company_id"],
+        comparisons=tuple(_comparison(item) for item in payload["comparisons"]),
+    )
+
+
+def _comparison(item: dict[str, Any]) -> Comparison:
+    actual_payload = item["actual"]
+    baseline_payload = item["baseline"]
     evidence_payload = actual_payload.get("evidence")
     if evidence_payload is None:
         raise ValueError("actual evidence is required")
@@ -58,10 +68,4 @@ def replay_event_fixture(path: Path) -> EventReplayResult:
         period=baseline_payload["period"],
         basis=baseline_payload["basis"],
     )
-
-    return replay_event(
-        event_id=payload["event_id"],
-        company_id=payload["company_id"],
-        actual=actual,
-        baseline=baseline,
-    )
+    return actual, baseline

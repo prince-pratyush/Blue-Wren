@@ -34,25 +34,29 @@ def test_replay_marks_different_periods_as_unresolved(tmp_path: Path) -> None:
         {
           "event_id": "acme-q2-2026",
           "company_id": "ACME-AU",
-          "actual": {
-            "metric": "revenue",
-            "value": "125.0",
-            "unit": "AUD_millions",
-            "period": "2026-Q2",
-            "basis": "reported",
-            "evidence": {
-              "document_id": "acme-q2-results",
-              "document_version_id": "acme-q2-results:version-1",
-              "locator": "page=2;table=results;row=revenue"
+          "comparisons": [
+            {
+            "actual": {
+              "metric": "revenue",
+              "value": "125.0",
+              "unit": "AUD_millions",
+              "period": "2026-Q2",
+              "basis": "reported",
+              "evidence": {
+                "document_id": "acme-q2-results",
+                "document_version_id": "acme-q2-results:version-1",
+                "locator": "page=2;table=results;row=revenue"
+              }
+            },
+            "baseline": {
+              "metric": "revenue",
+              "value": "120.0",
+              "unit": "AUD_millions",
+              "period": "2026-Q1",
+              "basis": "reported"
             }
-          },
-          "baseline": {
-            "metric": "revenue",
-            "value": "120.0",
-            "unit": "AUD_millions",
-            "period": "2026-Q1",
-            "basis": "reported"
-          }
+            }
+          ]
         }
         """,
         encoding="utf-8",
@@ -72,19 +76,23 @@ def test_replay_rejects_an_actual_without_evidence(tmp_path: Path) -> None:
         {
           "event_id": "acme-q2-2026",
           "company_id": "ACME-AU",
-          "actual": {
-            "metric": "revenue",
-            "value": "125.0",
-            "unit": "AUD_millions",
-            "period": "2026-Q2",
-            "basis": "reported"
-          },
-          "baseline": {
-            "metric": "revenue",
-            "value": "120.0",
-            "unit": "AUD_millions",
-            "period": "2026-Q2"
-          }
+          "comparisons": [
+            {
+            "actual": {
+              "metric": "revenue",
+              "value": "125.0",
+              "unit": "AUD_millions",
+              "period": "2026-Q2",
+              "basis": "reported"
+            },
+            "baseline": {
+              "metric": "revenue",
+              "value": "120.0",
+              "unit": "AUD_millions",
+              "period": "2026-Q2"
+            }
+            }
+          ]
         }
         """,
         encoding="utf-8",

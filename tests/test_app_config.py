@@ -14,25 +14,29 @@ from blue_wren.infrastructure.sqlite_review_store import SqliteEventReviewReposi
 PAYLOAD: dict[str, Any] = {
     "event_id": "acme-q2-2026",
     "company_id": "ACME-AU",
-    "actual": {
-        "metric": "revenue",
-        "value": "125.0",
-        "unit": "AUD_millions",
-        "period": "2026-Q2",
-        "basis": "reported",
-        "evidence": {
-            "document_id": "acme-q2-results",
-            "document_version_id": "acme-q2-results:version-1",
-            "locator": "page=2;table=results;row=revenue",
-        },
-    },
-    "baseline": {
-        "metric": "revenue",
-        "value": "120.0",
-        "unit": "AUD_millions",
-        "period": "2026-Q2",
-        "basis": "reported",
-    },
+    "comparisons": [
+        {
+            "actual": {
+                "metric": "revenue",
+                "value": "125.0",
+                "unit": "AUD_millions",
+                "period": "2026-Q2",
+                "basis": "reported",
+                "evidence": {
+                    "document_id": "acme-q2-results",
+                    "document_version_id": "acme-q2-results:version-1",
+                    "locator": "page=2;table=results;row=revenue",
+                },
+            },
+            "baseline": {
+                "metric": "revenue",
+                "value": "120.0",
+                "unit": "AUD_millions",
+                "period": "2026-Q2",
+                "basis": "reported",
+            },
+        }
+    ],
 }
 
 
@@ -81,7 +85,9 @@ async def test_reviews_survive_app_restart_with_sqlite(
             files={"file": ("results.pdf", b"%PDF-1.7\nQuarterly results", "application/pdf")},
         )
         payload = deepcopy(PAYLOAD)
-        payload["actual"]["evidence"]["document_version_id"] = ingested.json()["version_id"]
+        payload["comparisons"][0]["actual"]["evidence"]["document_version_id"] = ingested.json()[
+            "version_id"
+        ]
         created = await first.post("/v1/event-reviews", json=payload)
         assert created.status_code == 201
 
