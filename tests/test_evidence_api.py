@@ -50,6 +50,73 @@ async def test_create_evidence_version(client: AsyncClient) -> None:
     assert datetime.fromisoformat(body["ingested_at"]).tzinfo is UTC
 
 
+def _form(source_name: str = "ACME investor relations") -> dict[str, str]:
+    return {
+        "document_id": "acme-q2-results",
+        "source_name": source_name,
+        "rights_basis": "public",
+        "published_at": "2026-08-20T08:00:00Z",
+        "available_at": "2026-08-20T08:01:00Z",
+    }
+
+
+@pytest.mark.anyio
+async def test_get_evidence_version_returns_stored_record(client: AsyncClient) -> None:
+    created = await client.post(
+        "/v1/evidence/versions",
+        data=_form(),
+        files={"file": ("results.pdf", PDF_CONTENT, "application/pdf")},
+    )
+
+    response = await client.get(f"/v1/evidence/versions/{created.json()['version_id']}")
+
+    assert response.status_code == 200
+    assert response.json() == created.json()
+
+
+@pytest.mark.anyio
+async def test_get_unknown_evidence_version_returns_not_found(client: AsyncClient) -> None:
+    response = await client.get("/v1/evidence/versions/missing")
+
+    assert response.status_code == 404
+
+
+@pytest.mark.anyio
+async def test_reingesting_identical_content_keeps_first_record(client: AsyncClient) -> None:
+    first = await client.post(
+        "/v1/evidence/versions",
+        data=_form(),
+        files={"file": ("results.pdf", PDF_CONTENT, "application/pdf")},
+    )
+
+    second = await client.post(
+        "/v1/evidence/versions",
+        data=_form(),
+        files={"file": ("results.pdf", PDF_CONTENT, "application/pdf")},
+    )
+
+    assert second.status_code == 201
+    assert second.json() == first.json()
+
+
+@pytest.mark.anyio
+async def test_reingesting_with_different_metadata_conflicts(client: AsyncClient) -> None:
+    await client.post(
+        "/v1/evidence/versions",
+        data=_form(),
+        files={"file": ("results.pdf", PDF_CONTENT, "application/pdf")},
+    )
+
+    response = await client.post(
+        "/v1/evidence/versions",
+        data=_form(source_name="Other source"),
+        files={"file": ("results.pdf", PDF_CONTENT, "application/pdf")},
+    )
+
+    assert response.status_code == 409
+    assert "different metadata" in response.json()["detail"]
+
+
 @pytest.mark.anyio
 async def test_create_evidence_version_rejects_an_empty_file(client: AsyncClient) -> None:
     response = await client.post(

@@ -21,6 +21,11 @@ from blue_wren.application.event_review import (
     start_event_review,
 )
 from blue_wren.application.evidence import DEFAULT_MAX_BYTES, ingest_evidence
+from blue_wren.application.evidence_store import (
+    EvidenceVersionConflict,
+    EvidenceVersionNotFound,
+    EvidenceVersionRepository,
+)
 from blue_wren.application.exporting import assess_checked_export
 from blue_wren.application.replay import replay_event
 from blue_wren.application.review_store import (
@@ -46,6 +51,11 @@ def _event_reviews(request: Request) -> EventReviewRepository:
     return repository
 
 
+def _evidence_versions(request: Request) -> EvidenceVersionRepository:
+    repository: EvidenceVersionRepository = request.app.state.evidence_versions
+    return repository
+
+
 @router.post(
     "/evidence/versions",
     response_model=DocumentVersionResponse,
@@ -58,6 +68,7 @@ async def create_evidence_version(
     published_at: Annotated[datetime, Form()],
     available_at: Annotated[datetime, Form()],
     file: Annotated[UploadFile, File()],
+    repository: Annotated[EvidenceVersionRepository, Depends(_evidence_versions)],
 ) -> DocumentVersionResponse:
     content = await file.read(DEFAULT_MAX_BYTES + 1)
     try:
@@ -71,8 +82,23 @@ async def create_evidence_version(
             available_at=available_at,
             ingested_at=datetime.now(UTC),
         )
+        stored = repository.put(version)
     except EvidenceIntakeError as error:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
+    except EvidenceVersionConflict as error:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(error)) from error
+    return DocumentVersionResponse.model_validate(stored)
+
+
+@router.get("/evidence/versions/{version_id}", response_model=DocumentVersionResponse)
+def get_evidence_version(
+    version_id: str,
+    repository: Annotated[EvidenceVersionRepository, Depends(_evidence_versions)],
+) -> DocumentVersionResponse:
+    try:
+        version = repository.get(version_id)
+    except EvidenceVersionNotFound as error:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(error)) from error
     return DocumentVersionResponse.model_validate(version)
 
 

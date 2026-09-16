@@ -1,4 +1,5 @@
 import sqlite3
+from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
 from threading import Lock
@@ -63,7 +64,7 @@ class SqliteEvidenceVersionRepository:
                 )
                 return version
         existing = _decode(row)
-        if existing != version:
+        if replace(version, ingested_at=existing.ingested_at) != existing:
             raise EvidenceVersionConflict(
                 f"evidence version already exists with different metadata: {version.version_id}"
             )
