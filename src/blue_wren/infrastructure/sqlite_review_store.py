@@ -40,6 +40,16 @@ class SqliteEventReviewRepository:
             raise EventReviewNotFound(f"event review not found: {event_id}")
         return StoredEventReview(session=decode_session(json.loads(row[1])), revision=row[0])
 
+    def list(self) -> tuple[StoredEventReview, ...]:
+        with self._lock:
+            rows = self._connection.execute(
+                "SELECT revision, payload FROM event_reviews ORDER BY event_id"
+            ).fetchall()
+        return tuple(
+            StoredEventReview(session=decode_session(json.loads(row[1])), revision=row[0])
+            for row in rows
+        )
+
     def create(self, session: EventReviewSession) -> StoredEventReview:
         payload = json.dumps(encode_session(session))
         try:

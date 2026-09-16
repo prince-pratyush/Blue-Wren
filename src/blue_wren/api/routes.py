@@ -8,6 +8,7 @@ from blue_wren.api.schemas import (
     EventReplayRequest,
     EventReplayResponse,
     EventReviewResponse,
+    EventReviewSummaryResponse,
     ExportBlockerResponse,
     ExportReadinessResponse,
     FindingResponse,
@@ -95,6 +96,25 @@ def create_event_review(
     except EventReviewStoreConflict as error:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(error)) from error
     return _review_response(stored)
+
+
+@router.get("/event-reviews", response_model=list[EventReviewSummaryResponse])
+def list_event_reviews(
+    repository: Annotated[EventReviewRepository, Depends(_event_reviews)],
+) -> list[EventReviewSummaryResponse]:
+    return [
+        EventReviewSummaryResponse(
+            event_id=stored.session.event_id,
+            company_id=stored.session.company_id,
+            revision=stored.revision,
+            findings_total=len(stored.session.findings),
+            findings_pending=sum(
+                history.current_outcome is ReviewOutcome.PENDING
+                for history in stored.session.findings
+            ),
+        )
+        for stored in repository.list()
+    ]
 
 
 @router.get("/event-reviews/{event_id}", response_model=EventReviewResponse)

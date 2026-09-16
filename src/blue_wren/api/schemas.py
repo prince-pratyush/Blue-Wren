@@ -107,6 +107,14 @@ class EventReviewResponse(BaseModel):
     findings: list[ReviewedFindingResponse]
 
 
+class EventReviewSummaryResponse(BaseModel):
+    event_id: str
+    company_id: str
+    revision: int
+    findings_total: int
+    findings_pending: int
+
+
 class ExportBlockerResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

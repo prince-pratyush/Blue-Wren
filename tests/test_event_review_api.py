@@ -94,6 +94,52 @@ async def test_get_unknown_event_review_returns_not_found(client: AsyncClient) -
 
 
 @pytest.mark.anyio
+async def test_list_event_reviews_is_empty_initially(client: AsyncClient) -> None:
+    response = await client.get("/v1/event-reviews")
+
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+@pytest.mark.anyio
+async def test_list_event_reviews_returns_ordered_summaries(client: AsyncClient) -> None:
+    zeta = deepcopy(PAYLOAD)
+    zeta["event_id"] = "zeta-q2-2026"
+    zeta["company_id"] = "ZETA-AU"
+    await client.post("/v1/event-reviews", json=zeta)
+    created = await client.post("/v1/event-reviews", json=PAYLOAD)
+    finding_id = created.json()["findings"][0]["finding_id"]
+    await client.post(
+        f"/v1/event-reviews/acme-q2-2026/findings/{finding_id}/decisions",
+        json={
+            "expected_revision": 1,
+            "expected_version": 1,
+            "outcome": "accepted",
+            "reviewer_id": "analyst-7",
+        },
+    )
+
+    response = await client.get("/v1/event-reviews")
+
+    assert response.json() == [
+        {
+            "event_id": "acme-q2-2026",
+            "company_id": "ACME-AU",
+            "revision": 2,
+            "findings_total": 1,
+            "findings_pending": 0,
+        },
+        {
+            "event_id": "zeta-q2-2026",
+            "company_id": "ZETA-AU",
+            "revision": 1,
+            "findings_total": 1,
+            "findings_pending": 1,
+        },
+    ]
+
+
+@pytest.mark.anyio
 async def test_create_event_review_keeps_unresolved_findings_pending(
     client: AsyncClient,
 ) -> None:
