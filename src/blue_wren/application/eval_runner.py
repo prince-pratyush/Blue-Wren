@@ -1,11 +1,14 @@
 import json
+from dataclasses import replace
 from datetime import datetime
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
 from blue_wren.application.evaluation import score_findings
+from blue_wren.application.event_review import start_event_review
 from blue_wren.application.replay import replay_event_fixture
+from blue_wren.application.review import mark_source_version_stale
 from blue_wren.domain.evaluation import (
     EvaluationCaseResult,
     EvaluationReport,
@@ -14,7 +17,8 @@ from blue_wren.domain.evaluation import (
     EvaluationSuiteReport,
     ExpectedFinding,
 )
-from blue_wren.domain.findings import FindingStatus
+from blue_wren.domain.findings import Finding, FindingStatus
+from blue_wren.domain.review import ReviewOutcome
 
 
 class EvaluationFixtureError(ValueError):
@@ -31,6 +35,7 @@ def run_replay_evaluation(
     event_path: Path,
     expected_path: Path,
     source_manifest_path: Path,
+    restatement_path: Path | None = None,
 ) -> EvaluationReport:
     replay = replay_event_fixture(event_path)
     expected = load_expected_findings(expected_path)
@@ -49,7 +54,47 @@ def run_replay_evaluation(
         for finding in replay.findings
     ):
         raise EvaluationFixtureError("emitted evidence is not in source manifest")
-    return score_findings(expected=expected, emitted=replay.findings)
+    report = score_findings(expected=expected, emitted=replay.findings)
+    if restatement_path is None and all(item.review_outcome is None for item in expected):
+        return report
+
+    session = start_event_review(replay, created_at=manifest.cutoff_at)
+    histories = session.findings
+    if restatement_path is not None:
+        restatement: dict[str, Any] = json.loads(restatement_path.read_text(encoding="utf-8"))
+        marked_at = datetime.fromisoformat(restatement["marked_at"])
+        _require_timezone(marked_at)
+        histories = tuple(
+            mark_source_version_stale(
+                history,
+                expected_version=history.current_revision.version,
+                document_id=restatement["document_id"],
+                superseding_version_id=restatement["superseding_version_id"],
+                marked_at=marked_at,
+            )
+            for history in histories
+        )
+
+    outcomes = {
+        _outcome_key(history.current_revision.finding): history.current_outcome
+        for history in histories
+    }
+    errors = tuple(
+        f"{item.metric}: review outcome mismatch"
+        for item in expected
+        if item.review_outcome is not None
+        and outcomes.get(
+            (item.metric, item.period, item.basis, item.evidence_document_version_id)
+        )
+        is not item.review_outcome
+    )
+    if not errors:
+        return report
+    return replace(report, passed=False, critical_errors=(*report.critical_errors, *errors))
+
+
+def _outcome_key(finding: Finding) -> tuple[str, str, str, str]:
+    return (finding.metric, finding.period, finding.basis, finding.evidence.document_version_id)
 
 
 def discover_cases(directory: Path) -> tuple[str, ...]:
@@ -73,6 +118,7 @@ def run_evaluation_suite(directory: Path) -> EvaluationSuiteReport:
                 event_path=directory / f"{case_id}.json",
                 expected_path=directory / f"{case_id}.expected.json",
                 source_manifest_path=directory / f"{case_id}.sources.json",
+                restatement_path=_optional(directory / f"{case_id}.restatement.json"),
             ),
         )
         for case_id in discover_cases(directory)
@@ -83,9 +129,15 @@ def run_evaluation_suite(directory: Path) -> EvaluationSuiteReport:
     )
 
 
+def _optional(path: Path) -> Path | None:
+    return path if path.is_file() else None
+
+
 def _expected_finding(payload: dict[str, Any]) -> ExpectedFinding:
     delta = payload["delta"]
+    review_outcome = payload.get("review_outcome")
     return ExpectedFinding(
+        review_outcome=ReviewOutcome(review_outcome) if review_outcome is not None else None,
         metric=payload["metric"],
         actual=Decimal(payload["actual"]),
         baseline=Decimal(payload["baseline"]),
