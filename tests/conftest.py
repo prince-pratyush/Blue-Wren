@@ -2,7 +2,9 @@ from datetime import UTC, datetime
 
 import pytest
 
+from blue_wren.domain.company import Company
 from blue_wren.domain.evidence import DocumentVersion, RightsBasis
+from blue_wren.infrastructure.memory_company_store import InMemoryCompanyRepository
 from blue_wren.infrastructure.memory_evidence_store import InMemoryEvidenceVersionRepository
 
 SEEDED_VERSION = DocumentVersion(
@@ -23,4 +25,12 @@ SEEDED_VERSION = DocumentVersion(
 def evidence_versions() -> InMemoryEvidenceVersionRepository:
     repository = InMemoryEvidenceVersionRepository()
     repository.put(SEEDED_VERSION)
+    return repository
+
+
+@pytest.fixture
+def companies() -> InMemoryCompanyRepository:
+    repository = InMemoryCompanyRepository()
+    repository.create(Company(company_id="ACME-AU", name="ACME Limited", exchange="ASX"))
+    repository.create(Company(company_id="ZETA-AU", name="Zeta Holdings", exchange="ASX"))
     return repository

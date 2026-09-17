@@ -81,6 +81,11 @@ async def test_reviews_survive_app_restart_with_sqlite(
     async with AsyncClient(
         transport=ASGITransport(app=create_app()), base_url="http://test"
     ) as first:
+        registered = await first.post(
+            "/v1/companies",
+            json={"company_id": "ACME-AU", "name": "ACME Limited", "exchange": "ASX"},
+        )
+        assert registered.status_code == 201
         ingested = await first.post(
             "/v1/evidence/versions",
             data={
