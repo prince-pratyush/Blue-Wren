@@ -52,6 +52,17 @@ def test_score_findings_passes_an_exact_supported_result() -> None:
     assert report.critical_errors == ()
 
 
+def test_score_findings_flags_a_mislabeled_baseline_target() -> None:
+    expected = (replace(EXPECTED[0], baseline_target="guidance"),)
+
+    report = score_findings(
+        expected=expected, emitted=(replace(finding(), baseline_target="consensus"),)
+    )
+
+    assert report.passed is False
+    assert report.critical_errors == ("revenue: baseline target mismatch",)
+
+
 def test_score_findings_counts_a_missing_finding() -> None:
     report = score_findings(expected=EXPECTED, emitted=())
 
