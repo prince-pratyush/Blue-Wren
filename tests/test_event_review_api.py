@@ -134,6 +134,36 @@ async def test_citation_resolves_to_an_extracted_span(client: AsyncClient) -> No
 
 
 @pytest.mark.anyio
+async def test_citation_resolves_to_a_table_cell(client: AsyncClient) -> None:
+    uploaded = await client.post(
+        "/v1/evidence/versions",
+        data={
+            "document_id": "acme-q2-results",
+            "source_name": "ACME investor relations",
+            "rights_basis": "public",
+            "published_at": "2026-08-20T08:00:00Z",
+            "available_at": "2026-08-20T08:01:00Z",
+        },
+        files={
+            "file": (
+                "results.html",
+                b'<html><body><table id="results"><tr><td>Revenue</td><td>125.0</td></tr>'
+                b"</table></body></html>",
+                "text/html",
+            )
+        },
+    )
+    payload = deepcopy(PAYLOAD)
+    evidence = payload["comparisons"][0]["actual"]["evidence"]
+    evidence["document_version_id"] = uploaded.json()["version_id"]
+    evidence["locator"] = "page=1;table=results;row=1;col=2"
+
+    response = await client.post("/v1/event-reviews", json=payload)
+
+    assert response.json()["findings"][0]["citation_resolved"] is True
+
+
+@pytest.mark.anyio
 async def test_create_event_review_tracks_every_comparison(client: AsyncClient) -> None:
     payload = deepcopy(PAYLOAD)
     ebitda = deepcopy(payload["comparisons"][0])

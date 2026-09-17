@@ -82,6 +82,46 @@ def test_html_tags_and_scripts_are_stripped() -> None:
     assert not any("alert" in text for text in texts)
 
 
+def test_html_inline_tags_do_not_fragment_a_paragraph() -> None:
+    content = (
+        b"<html><body><p>EBITDA margin was <b>24</b> percent this <i>quarter</i>.</p>"
+        b"<p>Revenue rose to <a href='#'>125.0 million</a>.</p></body></html>"
+    )
+    version = _version(content, "text/html")
+
+    extracted = extract_text(version, content)
+
+    assert [span.text for span in extracted.spans] == [
+        "EBITDA margin was 24 percent this quarter .",
+        "Revenue rose to 125.0 million .",
+    ]
+    assert [span.locator for span in extracted.spans] == ["page=1;span=1", "page=1;span=2"]
+
+
+def test_html_table_cells_become_citable_spans() -> None:
+    content = (
+        b"<html><body><h1>Results</h1>"
+        b'<table id="results"><tr><th>Metric</th><th>FY26</th></tr>'
+        b"<tr><td>Revenue</td><td>125.0</td></tr></table>"
+        b"<table><tr><td>Note</td></tr></table>"
+        b"<p>Outlook strong.</p></body></html>"
+    )
+    version = _version(content, "text/html")
+
+    extracted = extract_text(version, content)
+
+    assert [(span.text, span.locator) for span in extracted.spans] == [
+        ("Results", "page=1;span=1"),
+        ("Metric", "page=1;table=results;row=1;col=1"),
+        ("FY26", "page=1;table=results;row=1;col=2"),
+        ("Revenue", "page=1;table=results;row=2;col=1"),
+        ("125.0", "page=1;table=results;row=2;col=2"),
+        ("Note", "page=1;table=2;row=1;col=1"),
+        ("Outlook strong.", "page=1;span=2"),
+    ]
+    assert [span.index for span in extracted.spans] == list(range(1, 8))
+
+
 def test_pdf_pages_produce_page_numbered_spans() -> None:
     content = _pdf(["Revenue rose to 125.0 million.", "EBITDA margin was 24 percent."])
     version = _version(content, "application/pdf")
