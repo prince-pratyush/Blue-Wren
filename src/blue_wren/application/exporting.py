@@ -1,21 +1,33 @@
+from collections.abc import Callable
+
 from blue_wren.domain.exporting import (
     CheckedExportReadiness,
     ExportBlocker,
     ExportBlockerCode,
 )
-from blue_wren.domain.findings import FindingStatus
+from blue_wren.domain.findings import EvidenceReference, FindingStatus
 from blue_wren.domain.review import FindingHistory, ReviewOutcome
 
 
 def assess_checked_export(
     histories: tuple[FindingHistory, ...],
+    *,
+    citation_resolved: Callable[[EvidenceReference], bool] | None = None,
 ) -> CheckedExportReadiness:
-    blockers = tuple(
-        blocker
-        for history in histories
-        if (blocker := _export_blocker(history)) is not None
-    )
-    return CheckedExportReadiness(allowed=not blockers, blockers=blockers)
+    blockers: list[ExportBlocker] = []
+    for history in histories:
+        blocker = _export_blocker(history)
+        if blocker is not None:
+            blockers.append(blocker)
+        current = history.current_revision
+        if citation_resolved is not None and not citation_resolved(current.finding.evidence):
+            blockers.append(
+                ExportBlocker(
+                    finding_id=current.finding_id,
+                    code=ExportBlockerCode.CITATION_UNRESOLVED,
+                )
+            )
+    return CheckedExportReadiness(allowed=not blockers, blockers=tuple(blockers))
 
 
 def _export_blocker(history: FindingHistory) -> ExportBlocker | None:

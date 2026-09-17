@@ -57,6 +57,28 @@ def test_checked_export_allows_only_accepted_supported_findings() -> None:
     assert report.blockers == ()
 
 
+def test_checked_export_blocks_accepted_finding_with_unresolved_citation() -> None:
+    report = assess_checked_export((reviewed(),), citation_resolved=lambda evidence: False)
+
+    assert report.allowed is False
+    assert [blocker.code for blocker in report.blockers] == [
+        ExportBlockerCode.CITATION_UNRESOLVED
+    ]
+
+
+def test_checked_export_passes_when_citation_resolves() -> None:
+    seen: list[str] = []
+
+    def resolver(evidence: EvidenceReference) -> bool:
+        seen.append(evidence.locator)
+        return True
+
+    report = assess_checked_export((reviewed(),), citation_resolved=resolver)
+
+    assert report.allowed is True
+    assert seen == ["page=2;table=results;row=revenue"]
+
+
 @pytest.mark.parametrize(
     ("outcome", "code"),
     [

@@ -73,13 +73,54 @@ async def test_pending_review_blocks_export(client: AsyncClient) -> None:
         "event_id": "acme-q2-2026",
         "revision": 1,
         "allowed": False,
-        "blockers": [{"finding_id": finding_id, "code": "review_pending"}],
+        "blockers": [
+            {"finding_id": finding_id, "code": "review_pending"},
+            {"finding_id": finding_id, "code": "citation_unresolved"},
+        ],
     }
 
 
 @pytest.mark.anyio
-async def test_accepted_review_allows_export(client: AsyncClient) -> None:
+async def test_accepted_review_with_unresolved_citation_blocks_export(
+    client: AsyncClient,
+) -> None:
     finding_id = await _create(client)
+    await client.post(
+        f"/v1/event-reviews/acme-q2-2026/findings/{finding_id}/decisions",
+        json={
+            "expected_revision": 1,
+            "expected_version": 1,
+            "outcome": "accepted",
+            "reviewer_id": "analyst-7",
+        },
+    )
+
+    response = await client.get(URL)
+
+    assert response.json()["allowed"] is False
+    assert response.json()["blockers"] == [
+        {"finding_id": finding_id, "code": "citation_unresolved"}
+    ]
+
+
+@pytest.mark.anyio
+async def test_accepted_review_allows_export(client: AsyncClient) -> None:
+    uploaded = await client.post(
+        "/v1/evidence/versions",
+        data={
+            "document_id": "acme-q2-results",
+            "source_name": "ACME investor relations",
+            "rights_basis": "public",
+            "published_at": "2026-08-20T08:00:00Z",
+            "available_at": "2026-08-20T08:01:00Z",
+        },
+        files={"file": ("results.txt", b"Revenue was 125.0 million.\n", "text/plain")},
+    )
+    payload = deepcopy(PAYLOAD)
+    evidence = payload["comparisons"][0]["actual"]["evidence"]
+    evidence["document_version_id"] = uploaded.json()["version_id"]
+    evidence["locator"] = "page=1;span=1"
+    finding_id = await _create(client, payload)
     decision = await client.post(
         f"/v1/event-reviews/acme-q2-2026/findings/{finding_id}/decisions",
         json={
@@ -110,7 +151,10 @@ async def test_unresolved_finding_blocks_export(client: AsyncClient) -> None:
     response = await client.get(URL)
 
     assert response.json()["allowed"] is False
-    assert response.json()["blockers"] == [{"finding_id": finding_id, "code": "unresolved"}]
+    assert response.json()["blockers"] == [
+        {"finding_id": finding_id, "code": "unresolved"},
+        {"finding_id": finding_id, "code": "citation_unresolved"},
+    ]
 
 
 @pytest.mark.anyio
