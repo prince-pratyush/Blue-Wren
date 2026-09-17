@@ -6,6 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from blue_wren.domain.evidence import RightsBasis
 from blue_wren.domain.exporting import ExportBlockerCode
+from blue_wren.domain.extraction import ExtractionStatus
 from blue_wren.domain.review import ReviewOutcome
 
 Identifier = Annotated[str, Field(min_length=1, max_length=128)]
@@ -131,6 +132,25 @@ class ExportReadinessResponse(BaseModel):
     revision: int
     allowed: bool
     blockers: list[ExportBlockerResponse]
+
+
+class TextSpanResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    page: int
+    index: int
+    text: str
+    locator: str
+
+
+class ExtractionResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    document_version_id: str
+    status: ExtractionStatus
+    page_count: int | None
+    reason: str | None
+    spans: list[TextSpanResponse]
 
 
 class DocumentVersionResponse(BaseModel):

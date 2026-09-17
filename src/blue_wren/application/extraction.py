@@ -4,6 +4,7 @@ from html.parser import HTMLParser
 from io import BytesIO
 
 from pypdf import PdfReader
+from pypdf.errors import PyPdfError
 
 from blue_wren.domain.evidence import DocumentVersion
 from blue_wren.domain.extraction import (
@@ -25,7 +26,10 @@ def extract_text(version: DocumentVersion, content: bytes) -> ExtractedDocument:
     elif version.media_type == "text/html":
         pages = [_html_text(content.decode("utf-8"))]
     elif version.media_type == "application/pdf":
-        pages = [page.extract_text() or "" for page in PdfReader(BytesIO(content)).pages]
+        try:
+            pages = [page.extract_text() or "" for page in PdfReader(BytesIO(content)).pages]
+        except PyPdfError as error:
+            raise ExtractionError(f"could not read pdf: {error}") from error
     else:
         raise ExtractionUnsupported(f"unsupported media type for extraction: {version.media_type}")
 
