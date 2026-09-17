@@ -69,6 +69,7 @@ def test_eval_smoke_cli_runs_every_case_in_the_directory(
         "acme_q2_2026_basis_mismatch",
         "acme_q2_2026_no_change",
         "acme_q2_2026_period_mismatch",
+        "acme_q2_2026_restated",
         "acme_q2_2026_unit_scale",
     ]
     assert all(case["passed"] for case in output["cases"].values())
@@ -100,6 +101,49 @@ def test_eval_smoke_cli_returns_failure_for_a_regression(
     output = json.loads(capsys.readouterr().out)
     assert output["passed"] is False
     assert output["cases"]["acme_q2_2026"]["critical_errors"] == ["revenue: actual mismatch"]
+
+
+RESTATED = FIXTURES / "acme_q2_2026_restated"
+
+
+def test_restatement_marks_the_cited_finding_stale() -> None:
+    report = run_replay_evaluation(
+        event_path=RESTATED.with_suffix(".json"),
+        expected_path=RESTATED.with_suffix(".expected.json"),
+        source_manifest_path=RESTATED.with_suffix(".sources.json"),
+        restatement_path=RESTATED.with_suffix(".restatement.json"),
+    )
+
+    assert report.passed is True
+    assert report.critical_errors == ()
+
+
+def test_expected_stale_outcome_fails_without_a_restatement() -> None:
+    report = run_replay_evaluation(
+        event_path=RESTATED.with_suffix(".json"),
+        expected_path=RESTATED.with_suffix(".expected.json"),
+        source_manifest_path=RESTATED.with_suffix(".sources.json"),
+    )
+
+    assert report.passed is False
+    assert report.critical_errors == ("revenue: review outcome mismatch",)
+
+
+def test_restatement_of_another_document_leaves_the_finding_pending(tmp_path: Path) -> None:
+    restatement_path = tmp_path / "other.restatement.json"
+    payload = json.loads(RESTATED.with_suffix(".restatement.json").read_text(encoding="utf-8"))
+    payload["document_id"] = "unrelated-document"
+    restatement_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    report = run_replay_evaluation(
+        event_path=RESTATED.with_suffix(".json"),
+        expected_path=RESTATED.with_suffix(".expected.json"),
+        source_manifest_path=RESTATED.with_suffix(".sources.json"),
+        restatement_path=restatement_path,
+    )
+
+    assert report.passed is False
+    assert report.critical_errors == ("revenue: review outcome mismatch",)
 
 
 def test_suite_discovery_rejects_an_incomplete_case(tmp_path: Path) -> None:

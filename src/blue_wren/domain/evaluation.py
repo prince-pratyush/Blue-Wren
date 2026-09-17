@@ -4,6 +4,7 @@ from decimal import Decimal
 from fractions import Fraction
 
 from blue_wren.domain.findings import FindingStatus
+from blue_wren.domain.review import ReviewOutcome
 
 
 @dataclass(frozen=True, slots=True)
@@ -18,6 +19,7 @@ class ExpectedFinding:
     evidence_document_id: str
     evidence_document_version_id: str
     status: FindingStatus
+    review_outcome: ReviewOutcome | None = None
 
 
 @dataclass(frozen=True, slots=True)
