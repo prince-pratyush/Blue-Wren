@@ -94,6 +94,46 @@ async def test_create_event_review_rejects_duplicate_event(client: AsyncClient) 
 
 
 @pytest.mark.anyio
+async def test_citation_is_unresolved_without_extracted_span(client: AsyncClient) -> None:
+    response = await client.post("/v1/event-reviews", json=PAYLOAD)
+
+    assert response.json()["findings"][0]["citation_resolved"] is False
+    listed = await client.get("/v1/event-reviews")
+    assert listed.json()[0]["citations_unresolved"] == 1
+
+
+@pytest.mark.anyio
+async def test_citation_resolves_to_an_extracted_span(client: AsyncClient) -> None:
+    uploaded = await client.post(
+        "/v1/evidence/versions",
+        data={
+            "document_id": "acme-q2-results",
+            "source_name": "ACME investor relations",
+            "rights_basis": "public",
+            "published_at": "2026-08-20T08:00:00Z",
+            "available_at": "2026-08-20T08:01:00Z",
+        },
+        files={"file": ("results.txt", b"Revenue was 125.0 million.\n", "text/plain")},
+    )
+    version_id = uploaded.json()["version_id"]
+    payload = deepcopy(PAYLOAD)
+    evidence = payload["comparisons"][0]["actual"]["evidence"]
+    evidence["document_version_id"] = version_id
+    evidence["locator"] = "page=1;span=1"
+    wrong = deepcopy(payload)
+    wrong["event_id"] = "acme-q2-2026-wrong"
+    wrong["comparisons"][0]["actual"]["evidence"]["locator"] = "page=1;span=9"
+
+    resolved = await client.post("/v1/event-reviews", json=payload)
+    unresolved = await client.post("/v1/event-reviews", json=wrong)
+
+    assert resolved.json()["findings"][0]["citation_resolved"] is True
+    assert unresolved.json()["findings"][0]["citation_resolved"] is False
+    listed = await client.get("/v1/event-reviews")
+    assert [item["citations_unresolved"] for item in listed.json()] == [0, 1]
+
+
+@pytest.mark.anyio
 async def test_create_event_review_tracks_every_comparison(client: AsyncClient) -> None:
     payload = deepcopy(PAYLOAD)
     ebitda = deepcopy(payload["comparisons"][0])
@@ -191,6 +231,7 @@ async def test_list_event_reviews_returns_ordered_summaries(client: AsyncClient)
             "revision": 2,
             "findings_total": 1,
             "findings_pending": 0,
+            "citations_unresolved": 1,
         },
         {
             "event_id": "zeta-q2-2026",
@@ -198,6 +239,7 @@ async def test_list_event_reviews_returns_ordered_summaries(client: AsyncClient)
             "revision": 1,
             "findings_total": 1,
             "findings_pending": 1,
+            "citations_unresolved": 1,
         },
     ]
 

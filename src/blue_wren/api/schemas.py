@@ -102,6 +102,7 @@ class ReviewedFindingResponse(BaseModel):
     finding_id: str
     version: int
     outcome: ReviewOutcome
+    citation_resolved: bool
     finding: FindingResponse
 
 
@@ -118,6 +119,7 @@ class EventReviewSummaryResponse(BaseModel):
     revision: int
     findings_total: int
     findings_pending: int
+    citations_unresolved: int
 
 
 class ExportBlockerResponse(BaseModel):
