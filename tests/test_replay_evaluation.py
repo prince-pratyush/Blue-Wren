@@ -64,7 +64,14 @@ def test_eval_smoke_cli_runs_every_case_in_the_directory(
     assert exit_code == 0
     output = json.loads(capsys.readouterr().out)
     assert output["passed"] is True
-    assert sorted(output["cases"]) == ["acme_q2_2026", "acme_q2_2026_period_mismatch"]
+    assert sorted(output["cases"]) == [
+        "acme_q2_2026",
+        "acme_q2_2026_basis_mismatch",
+        "acme_q2_2026_no_change",
+        "acme_q2_2026_period_mismatch",
+        "acme_q2_2026_unit_scale",
+    ]
+    assert all(case["passed"] for case in output["cases"].values())
     assert output["cases"]["acme_q2_2026"] == {
         "critical_errors": [],
         "false_negatives": 0,
