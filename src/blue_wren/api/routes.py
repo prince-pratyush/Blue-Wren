@@ -325,22 +325,7 @@ def create_review_decision(
     extractions: Annotated[ExtractionRepository, Depends(_extractions)],
 ) -> EventReviewResponse:
     try:
-        stored = repository.get(event_id)
-        if stored.revision != request.expected_revision:
-            raise EventReviewStoreConflict(
-                f"expected revision {request.expected_revision}, "
-                f"current revision is {stored.revision}"
-            )
-        session = decide_event_finding(
-            stored.session,
-            finding_id=finding_id,
-            expected_version=request.expected_version,
-            outcome=ReviewOutcome(request.outcome),
-            reviewer_id=request.reviewer_id,
-            decided_at=datetime.now(UTC),
-            reason=request.reason,
-        )
-        updated = repository.update(session, expected_revision=request.expected_revision)
+        updated = _apply_decision(repository, event_id, finding_id, request)
     except (EventReviewNotFound, EventReviewError) as error:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(error)) from error
     except (EventReviewStoreConflict, ReviewConflict) as error:
@@ -359,6 +344,36 @@ def _require_ingested(repository: EvidenceVersionRepository, reference: Evidence
             f"evidence version {reference.document_version_id} belongs to "
             f"{version.document_id}, not {reference.document_id}"
         )
+
+
+def _apply_decision(
+    repository: EventReviewRepository,
+    event_id: str,
+    finding_id: str,
+    request: ReviewDecisionRequest,
+) -> StoredEventReview:
+    for _ in range(3):
+        stored = repository.get(event_id)
+        pinned = request.expected_revision
+        if pinned is not None and stored.revision != pinned:
+            raise EventReviewStoreConflict(
+                f"expected revision {pinned}, current revision is {stored.revision}"
+            )
+        session = decide_event_finding(
+            stored.session,
+            finding_id=finding_id,
+            expected_version=request.expected_version,
+            outcome=ReviewOutcome(request.outcome),
+            reviewer_id=request.reviewer_id,
+            decided_at=datetime.now(UTC),
+            reason=request.reason,
+        )
+        try:
+            return repository.update(session, expected_revision=stored.revision)
+        except EventReviewStoreConflict:
+            if pinned is not None:
+                raise
+    raise EventReviewStoreConflict(f"event review changed concurrently: {event_id}")
 
 
 def _citation_resolved(extractions: ExtractionRepository, evidence: EvidenceReference) -> bool:

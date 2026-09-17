@@ -93,7 +93,7 @@ class EventReplayResponse(BaseModel):
 
 
 class ReviewDecisionRequest(BaseModel):
-    expected_revision: Annotated[int, Field(ge=1)]
+    expected_revision: Annotated[int, Field(ge=1)] | None = None
     expected_version: Annotated[int, Field(ge=1)]
     outcome: Literal["accepted", "rejected", "deferred"]
     reviewer_id: Identifier

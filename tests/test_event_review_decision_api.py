@@ -87,6 +87,38 @@ async def test_decision_records_outcome_and_bumps_revision(client: AsyncClient) 
 
 
 @pytest.mark.anyio
+async def test_unpinned_decisions_on_different_findings_both_succeed(client: AsyncClient) -> None:
+    payload = deepcopy(PAYLOAD)
+    ebitda = deepcopy(payload["comparisons"][0])
+    ebitda["actual"]["metric"] = "ebitda"
+    ebitda["baseline"]["metric"] = "ebitda"
+    payload["comparisons"].append(ebitda)
+    created = await client.post("/v1/event-reviews", json=payload)
+    first_id, second_id = (item["finding_id"] for item in created.json()["findings"])
+    unpinned = {"expected_version": 1, "outcome": "accepted", "reviewer_id": "analyst-7"}
+
+    first = await client.post(_url(first_id), json=unpinned)
+    second = await client.post(_url(second_id), json={**unpinned, "reviewer_id": "analyst-9"})
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert second.json()["revision"] == 3
+    assert [item["outcome"] for item in second.json()["findings"]] == ["accepted", "accepted"]
+
+
+@pytest.mark.anyio
+async def test_unpinned_decision_still_rejects_a_reviewed_finding(client: AsyncClient) -> None:
+    finding_id = await _create(client)
+    unpinned = {"expected_version": 1, "outcome": "deferred", "reviewer_id": "analyst-7"}
+    await client.post(_url(finding_id), json=unpinned)
+
+    response = await client.post(_url(finding_id), json={**unpinned, "outcome": "accepted"})
+
+    assert response.status_code == 409
+    assert "already reviewed" in response.json()["detail"]
+
+
+@pytest.mark.anyio
 async def test_decision_rejects_stale_revision(client: AsyncClient) -> None:
     finding_id = await _create(client)
     await client.post(_url(finding_id), json={**DECISION, "outcome": "deferred"})
