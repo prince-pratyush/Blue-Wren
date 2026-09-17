@@ -423,5 +423,6 @@ def _comparison(
         unit=item.baseline.unit,
         period=item.baseline.period,
         basis=item.baseline.basis,
+        target=item.baseline.target,
     )
     return actual, baseline

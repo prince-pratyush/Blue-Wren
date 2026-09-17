@@ -78,6 +78,7 @@ async def test_event_replay_returns_an_evidence_linked_finding(
                 "status": "proposed",
                 "reason": None,
                 "baseline_normalization": None,
+                "baseline_target": "estimate",
             }
         ],
     }

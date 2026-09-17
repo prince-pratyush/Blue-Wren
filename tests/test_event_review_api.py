@@ -153,6 +153,25 @@ async def test_create_event_review_tracks_every_comparison(client: AsyncClient) 
 
 
 @pytest.mark.anyio
+async def test_same_metric_against_estimate_and_consensus_are_distinct(
+    client: AsyncClient,
+) -> None:
+    payload = deepcopy(PAYLOAD)
+    consensus = deepcopy(payload["comparisons"][0])
+    consensus["baseline"]["value"] = "122.0"
+    consensus["baseline"]["target"] = "consensus"
+    payload["comparisons"].append(consensus)
+
+    response = await client.post("/v1/event-reviews", json=payload)
+
+    assert response.status_code == 201
+    findings = response.json()["findings"]
+    assert [item["finding"]["baseline_target"] for item in findings] == ["estimate", "consensus"]
+    assert [item["finding"]["delta"] for item in findings] == ["5.0", "3.0"]
+    assert len({item["finding_id"] for item in findings}) == 2
+
+
+@pytest.mark.anyio
 async def test_create_event_review_rejects_duplicate_comparisons(client: AsyncClient) -> None:
     payload = deepcopy(PAYLOAD)
     payload["comparisons"].append(deepcopy(payload["comparisons"][0]))

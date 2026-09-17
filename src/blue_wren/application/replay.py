@@ -67,5 +67,6 @@ def _comparison(item: dict[str, Any]) -> Comparison:
         unit=baseline_payload["unit"],
         period=baseline_payload["period"],
         basis=baseline_payload["basis"],
+        target=baseline_payload.get("target", "estimate"),
     )
     return actual, baseline
