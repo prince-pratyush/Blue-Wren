@@ -7,9 +7,11 @@ from typing import Any
 from blue_wren.application.evaluation import score_findings
 from blue_wren.application.replay import replay_event_fixture
 from blue_wren.domain.evaluation import (
+    EvaluationCaseResult,
     EvaluationReport,
     EvaluationSource,
     EvaluationSourceManifest,
+    EvaluationSuiteReport,
     ExpectedFinding,
 )
 from blue_wren.domain.findings import FindingStatus
@@ -48,6 +50,37 @@ def run_replay_evaluation(
     ):
         raise EvaluationFixtureError("emitted evidence is not in source manifest")
     return score_findings(expected=expected, emitted=replay.findings)
+
+
+def discover_cases(directory: Path) -> tuple[str, ...]:
+    cases = []
+    for expected in sorted(directory.glob("*.expected.json")):
+        case_id = expected.name.removesuffix(".expected.json")
+        for suffix in (".json", ".sources.json"):
+            if not (directory / f"{case_id}{suffix}").is_file():
+                raise EvaluationFixtureError(f"case {case_id} is missing {case_id}{suffix}")
+        cases.append(case_id)
+    if not cases:
+        raise EvaluationFixtureError(f"no evaluation cases found in {directory}")
+    return tuple(cases)
+
+
+def run_evaluation_suite(directory: Path) -> EvaluationSuiteReport:
+    results = tuple(
+        EvaluationCaseResult(
+            case_id=case_id,
+            report=run_replay_evaluation(
+                event_path=directory / f"{case_id}.json",
+                expected_path=directory / f"{case_id}.expected.json",
+                source_manifest_path=directory / f"{case_id}.sources.json",
+            ),
+        )
+        for case_id in discover_cases(directory)
+    )
+    return EvaluationSuiteReport(
+        passed=all(result.report.passed for result in results),
+        cases=results,
+    )
 
 
 def _expected_finding(payload: dict[str, Any]) -> ExpectedFinding:

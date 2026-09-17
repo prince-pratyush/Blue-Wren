@@ -32,6 +32,18 @@ class EvaluationReport:
 
 
 @dataclass(frozen=True, slots=True)
+class EvaluationCaseResult:
+    case_id: str
+    report: EvaluationReport
+
+
+@dataclass(frozen=True, slots=True)
+class EvaluationSuiteReport:
+    passed: bool
+    cases: tuple[EvaluationCaseResult, ...]
+
+
+@dataclass(frozen=True, slots=True)
 class EvaluationSource:
     document_id: str
     version_id: str
