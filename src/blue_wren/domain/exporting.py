@@ -8,6 +8,7 @@ class ExportBlockerCode(StrEnum):
     REVIEW_PENDING = "review_pending"
     REVIEW_REJECTED = "review_rejected"
     REVIEW_DEFERRED = "review_deferred"
+    CITATION_UNRESOLVED = "citation_unresolved"
 
 
 @dataclass(frozen=True, slots=True)

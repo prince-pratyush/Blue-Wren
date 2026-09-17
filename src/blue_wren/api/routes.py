@@ -239,12 +239,16 @@ def get_event_review(
 def get_export_readiness(
     event_id: str,
     repository: Annotated[EventReviewRepository, Depends(_event_reviews)],
+    extractions: Annotated[ExtractionRepository, Depends(_extractions)],
 ) -> ExportReadinessResponse:
     try:
         stored = repository.get(event_id)
     except EventReviewNotFound as error:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(error)) from error
-    readiness = assess_checked_export(stored.session.findings)
+    readiness = assess_checked_export(
+        stored.session.findings,
+        citation_resolved=lambda evidence: _citation_resolved(extractions, evidence),
+    )
     return ExportReadinessResponse(
         event_id=event_id,
         revision=stored.revision,
