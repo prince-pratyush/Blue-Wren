@@ -19,7 +19,11 @@ from blue_wren.api.schemas import (
     ReviewDecisionRequest,
     ReviewedFindingResponse,
 )
-from blue_wren.application.company_store import CompanyConflict, CompanyRepository
+from blue_wren.application.company_store import (
+    CompanyConflict,
+    CompanyNotFound,
+    CompanyRepository,
+)
 from blue_wren.application.event_review import (
     EventReviewError,
     decide_event_finding,
@@ -223,12 +227,14 @@ def create_event_review(
     repository: Annotated[EventReviewRepository, Depends(_event_reviews)],
     evidence: Annotated[EvidenceVersionRepository, Depends(_evidence_versions)],
     extractions: Annotated[ExtractionRepository, Depends(_extractions)],
+    companies: Annotated[CompanyRepository, Depends(_companies)],
 ) -> EventReviewResponse:
     replay = _replay(request)
     try:
+        companies.get(request.company_id)
         for finding in replay.findings:
             _require_ingested(evidence, finding.evidence)
-    except (EvidenceVersionNotFound, EvidenceIntakeError) as error:
+    except (CompanyNotFound, EvidenceVersionNotFound, EvidenceIntakeError) as error:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(error)
         ) from error

@@ -6,6 +6,7 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 
 from blue_wren.api.main import create_app
+from blue_wren.infrastructure.memory_company_store import InMemoryCompanyRepository
 from blue_wren.infrastructure.memory_evidence_store import InMemoryEvidenceVersionRepository
 
 
@@ -17,11 +18,10 @@ def anyio_backend() -> str:
 @pytest.fixture
 async def client(
     evidence_versions: InMemoryEvidenceVersionRepository,
+    companies: InMemoryCompanyRepository,
 ) -> AsyncIterator[AsyncClient]:
-    async with AsyncClient(
-        transport=ASGITransport(app=create_app(evidence_versions=evidence_versions)),
-        base_url="http://test",
-    ) as test_client:
+    app = create_app(evidence_versions=evidence_versions, companies=companies)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as test_client:
         yield test_client
 
 
@@ -187,6 +187,17 @@ async def test_create_event_review_rejects_evidence_from_another_document(
 
     assert response.status_code == 422
     assert "acme-q1-results" in response.json()["detail"]
+
+
+@pytest.mark.anyio
+async def test_create_event_review_rejects_unregistered_company(client: AsyncClient) -> None:
+    payload = deepcopy(PAYLOAD)
+    payload["company_id"] = "NOPE-AU"
+
+    response = await client.post("/v1/event-reviews", json=payload)
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == "company not found: NOPE-AU"
 
 
 @pytest.mark.anyio
