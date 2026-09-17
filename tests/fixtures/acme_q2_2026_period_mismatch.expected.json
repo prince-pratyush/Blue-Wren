@@ -1,0 +1,16 @@
+{
+  "findings": [
+    {
+      "metric": "revenue",
+      "actual": "125.0",
+      "baseline": "118.0",
+      "delta": null,
+      "unit": "AUD_millions",
+      "period": "2026-Q2",
+      "basis": "reported",
+      "evidence_document_id": "acme-q2-results",
+      "evidence_document_version_id": "acme-q2-results:version-1",
+      "status": "unresolved"
+    }
+  ]
+}

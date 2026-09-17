@@ -6,6 +6,7 @@ import pytest
 
 from blue_wren.application.eval_runner import (
     EvaluationFixtureError,
+    discover_cases,
     load_expected_findings,
     run_replay_evaluation,
 )
@@ -55,14 +56,16 @@ def test_run_replay_evaluation_fails_a_changed_expectation(tmp_path: Path) -> No
     assert report.critical_errors == ("revenue: delta mismatch",)
 
 
-def test_eval_smoke_cli_returns_success_and_machine_readable_output(
+def test_eval_smoke_cli_runs_every_case_in_the_directory(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    exit_code = main([str(EVENT), str(EXPECTED), str(SOURCES)])
+    exit_code = main([str(FIXTURES)])
 
     assert exit_code == 0
     output = json.loads(capsys.readouterr().out)
-    assert output == {
+    assert output["passed"] is True
+    assert sorted(output["cases"]) == ["acme_q2_2026", "acme_q2_2026_period_mismatch"]
+    assert output["cases"]["acme_q2_2026"] == {
         "critical_errors": [],
         "false_negatives": 0,
         "false_positives": 0,
@@ -71,23 +74,37 @@ def test_eval_smoke_cli_returns_success_and_machine_readable_output(
         "recall": 1.0,
         "true_positives": 1,
     }
+    assert output["cases"]["acme_q2_2026_period_mismatch"]["passed"] is True
 
 
 def test_eval_smoke_cli_returns_failure_for_a_regression(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    expected_path = tmp_path / "wrong.expected.json"
+    for name in ("acme_q2_2026.json", "acme_q2_2026.sources.json"):
+        (tmp_path / name).write_text((FIXTURES / name).read_text(encoding="utf-8"))
     payload = json.loads(EXPECTED.read_text(encoding="utf-8"))
     payload["findings"][0]["actual"] = "999.0"
-    expected_path.write_text(json.dumps(payload), encoding="utf-8")
+    (tmp_path / "acme_q2_2026.expected.json").write_text(json.dumps(payload), encoding="utf-8")
 
-    exit_code = main([str(EVENT), str(expected_path), str(SOURCES)])
+    exit_code = main([str(tmp_path)])
 
     assert exit_code == 1
     output = json.loads(capsys.readouterr().out)
     assert output["passed"] is False
-    assert output["critical_errors"] == ["revenue: actual mismatch"]
+    assert output["cases"]["acme_q2_2026"]["critical_errors"] == ["revenue: actual mismatch"]
+
+
+def test_suite_discovery_rejects_an_incomplete_case(tmp_path: Path) -> None:
+    (tmp_path / "orphan.expected.json").write_text("{}", encoding="utf-8")
+
+    with pytest.raises(EvaluationFixtureError, match="missing orphan.json"):
+        discover_cases(tmp_path)
+
+
+def test_suite_discovery_rejects_an_empty_directory(tmp_path: Path) -> None:
+    with pytest.raises(EvaluationFixtureError, match="no evaluation cases"):
+        discover_cases(tmp_path)
 
 
 def test_evaluation_rejects_evidence_unavailable_at_the_cutoff(tmp_path: Path) -> None:
