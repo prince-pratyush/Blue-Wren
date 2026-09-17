@@ -122,6 +122,7 @@ def _encode_finding(finding: Finding) -> dict[str, Any]:
         },
         "status": finding.status.value,
         "reason": finding.reason,
+        "baseline_target": finding.baseline_target,
         "baseline_normalization": None
         if normalization is None
         else {
@@ -151,6 +152,7 @@ def _decode_finding(payload: dict[str, Any]) -> Finding:
         ),
         status=FindingStatus(payload["status"]),
         reason=payload["reason"],
+        baseline_target=payload.get("baseline_target", "estimate"),
         baseline_normalization=None
         if normalization is None
         else FinancialNormalization(

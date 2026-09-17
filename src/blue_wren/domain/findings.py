@@ -43,6 +43,7 @@ class BaselineObservation:
     unit: str
     period: str
     basis: str
+    target: str = "estimate"
 
 
 @dataclass(frozen=True, slots=True)
@@ -58,6 +59,7 @@ class Finding:
     status: FindingStatus
     reason: str | None = None
     baseline_normalization: FinancialNormalization | None = None
+    baseline_target: str = "estimate"
 
 
 @dataclass(frozen=True, slots=True)
@@ -85,6 +87,7 @@ def compare_observations(
             evidence=actual.evidence,
             status=FindingStatus.UNRESOLVED,
             reason=mismatch,
+            baseline_target=baseline.target,
         )
 
     normalized_baseline = convert_financial_value(
@@ -104,6 +107,7 @@ def compare_observations(
             evidence=actual.evidence,
             status=FindingStatus.UNRESOLVED,
             reason="unit_mismatch",
+            baseline_target=baseline.target,
         )
 
     return Finding(
@@ -126,6 +130,7 @@ def compare_observations(
             if baseline.unit != actual.unit
             else None
         ),
+        baseline_target=baseline.target,
     )
 
 

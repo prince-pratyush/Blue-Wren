@@ -36,6 +36,7 @@ class BaselineObservationRequest(BaseModel):
     unit: Identifier
     period: Identifier
     basis: Identifier
+    target: Literal["estimate", "consensus", "guidance", "prior_period"] = "estimate"
 
 
 class ObservationComparisonRequest(BaseModel):
@@ -80,6 +81,7 @@ class FindingResponse(BaseModel):
     status: Literal["proposed", "unresolved"]
     reason: str | None
     baseline_normalization: FinancialNormalizationResponse | None
+    baseline_target: str
 
 
 class EventReplayResponse(BaseModel):
