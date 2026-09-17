@@ -75,6 +75,65 @@ async def test_get_evidence_version_returns_stored_record(client: AsyncClient) -
 
 
 @pytest.mark.anyio
+async def test_upload_extracts_text_spans(client: AsyncClient) -> None:
+    content = b"Revenue rose to 125.0 million.\n\nEBITDA margin was 24 percent.\n"
+    created = await client.post(
+        "/v1/evidence/versions",
+        data=_form(),
+        files={"file": ("results.txt", content, "text/plain")},
+    )
+
+    response = await client.get(f"/v1/evidence/versions/{created.json()['version_id']}/spans")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "document_version_id": created.json()["version_id"],
+        "status": "extracted",
+        "page_count": 1,
+        "reason": None,
+        "spans": [
+            {
+                "page": 1,
+                "index": 1,
+                "text": "Revenue rose to 125.0 million.",
+                "locator": "page=1;span=1",
+            },
+            {
+                "page": 1,
+                "index": 2,
+                "text": "EBITDA margin was 24 percent.",
+                "locator": "page=1;span=2",
+            },
+        ],
+    }
+
+
+@pytest.mark.anyio
+async def test_upload_records_failed_extraction_for_unreadable_pdf(
+    client: AsyncClient,
+) -> None:
+    created = await client.post(
+        "/v1/evidence/versions",
+        data=_form(),
+        files={"file": ("results.pdf", PDF_CONTENT, "application/pdf")},
+    )
+
+    response = await client.get(f"/v1/evidence/versions/{created.json()['version_id']}/spans")
+
+    body = response.json()
+    assert body["status"] == "failed"
+    assert body["reason"].startswith("could not read pdf")
+    assert body["spans"] == []
+
+
+@pytest.mark.anyio
+async def test_spans_for_unknown_version_return_not_found(client: AsyncClient) -> None:
+    response = await client.get("/v1/evidence/versions/missing/spans")
+
+    assert response.status_code == 404
+
+
+@pytest.mark.anyio
 async def test_get_unknown_evidence_version_returns_not_found(client: AsyncClient) -> None:
     response = await client.get("/v1/evidence/versions/missing")
 

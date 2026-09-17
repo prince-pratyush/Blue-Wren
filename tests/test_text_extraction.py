@@ -97,6 +97,14 @@ def test_pdf_pages_produce_page_numbered_spans() -> None:
     assert "24 percent" in extracted.spans[1].text
 
 
+def test_malformed_pdf_fails_explicitly() -> None:
+    content = b"%PDF-1.7\nnot really a pdf"
+    version = _version(content, "application/pdf")
+
+    with pytest.raises(ExtractionError, match="could not read pdf"):
+        extract_text(version, content)
+
+
 def test_pdf_without_text_layer_fails_explicitly() -> None:
     content = _pdf([""])
     version = _version(content, "application/pdf")

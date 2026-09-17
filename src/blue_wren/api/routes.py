@@ -11,6 +11,7 @@ from blue_wren.api.schemas import (
     EventReviewSummaryResponse,
     ExportBlockerResponse,
     ExportReadinessResponse,
+    ExtractionResponse,
     FindingResponse,
     ObservationComparisonRequest,
     ReviewDecisionRequest,
@@ -28,6 +29,8 @@ from blue_wren.application.evidence_store import (
     EvidenceVersionRepository,
 )
 from blue_wren.application.exporting import assess_checked_export
+from blue_wren.application.extraction import extract_text
+from blue_wren.application.extraction_store import ExtractionNotFound, ExtractionRepository
 from blue_wren.application.replay import replay_event
 from blue_wren.application.review_store import (
     EventReviewNotFound,
@@ -35,7 +38,13 @@ from blue_wren.application.review_store import (
     EventReviewStoreConflict,
     StoredEventReview,
 )
-from blue_wren.domain.evidence import EvidenceIntakeError, RightsBasis
+from blue_wren.domain.evidence import DocumentVersion, EvidenceIntakeError, RightsBasis
+from blue_wren.domain.extraction import (
+    ExtractionError,
+    ExtractionRecord,
+    ExtractionStatus,
+    ExtractionUnsupported,
+)
 from blue_wren.domain.findings import (
     BaselineObservation,
     EventReplayResult,
@@ -57,6 +66,11 @@ def _evidence_versions(request: Request) -> EvidenceVersionRepository:
     return repository
 
 
+def _extractions(request: Request) -> ExtractionRepository:
+    repository: ExtractionRepository = request.app.state.extractions
+    return repository
+
+
 @router.post(
     "/evidence/versions",
     response_model=DocumentVersionResponse,
@@ -70,6 +84,7 @@ async def create_evidence_version(
     available_at: Annotated[datetime, Form()],
     file: Annotated[UploadFile, File()],
     repository: Annotated[EvidenceVersionRepository, Depends(_evidence_versions)],
+    extractions: Annotated[ExtractionRepository, Depends(_extractions)],
 ) -> DocumentVersionResponse:
     content = await file.read(DEFAULT_MAX_BYTES + 1)
     try:
@@ -88,7 +103,47 @@ async def create_evidence_version(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
     except EvidenceVersionConflict as error:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(error)) from error
+    extractions.put(_extraction_record(stored, content))
     return DocumentVersionResponse.model_validate(stored)
+
+
+@router.get("/evidence/versions/{version_id}/spans", response_model=ExtractionResponse)
+def get_evidence_spans(
+    version_id: str,
+    extractions: Annotated[ExtractionRepository, Depends(_extractions)],
+) -> ExtractionResponse:
+    try:
+        record = extractions.get(version_id)
+    except ExtractionNotFound as error:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(error)) from error
+    return ExtractionResponse.model_validate(record)
+
+
+def _extraction_record(version: DocumentVersion, content: bytes) -> ExtractionRecord:
+    try:
+        extracted = extract_text(version, content)
+    except ExtractionUnsupported as error:
+        return ExtractionRecord(
+            document_version_id=version.version_id,
+            status=ExtractionStatus.UNSUPPORTED,
+            page_count=None,
+            spans=(),
+            reason=str(error),
+        )
+    except ExtractionError as error:
+        return ExtractionRecord(
+            document_version_id=version.version_id,
+            status=ExtractionStatus.FAILED,
+            page_count=None,
+            spans=(),
+            reason=str(error),
+        )
+    return ExtractionRecord(
+        document_version_id=version.version_id,
+        status=ExtractionStatus.EXTRACTED,
+        page_count=extracted.page_count,
+        spans=extracted.spans,
+    )
 
 
 @router.get("/evidence/versions/{version_id}", response_model=DocumentVersionResponse)
