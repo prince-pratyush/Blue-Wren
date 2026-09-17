@@ -1,0 +1,27 @@
+{
+  "event_id": "acme-q2-2026-no-change",
+  "company_id": "ACME-AU",
+  "comparisons": [
+    {
+      "actual": {
+        "metric": "revenue",
+        "value": "120.0",
+        "unit": "AUD_millions",
+        "period": "2026-Q2",
+        "basis": "reported",
+        "evidence": {
+          "document_id": "acme-q2-results",
+          "document_version_id": "acme-q2-results:version-1",
+          "locator": "page=2;table=results;row=revenue"
+        }
+      },
+      "baseline": {
+        "metric": "revenue",
+        "value": "120.0",
+        "unit": "AUD_millions",
+        "period": "2026-Q2",
+        "basis": "reported"
+      }
+    }
+  ]
+}
