@@ -172,6 +172,7 @@ def create_event_review(
     request: EventReplayRequest,
     repository: Annotated[EventReviewRepository, Depends(_event_reviews)],
     evidence: Annotated[EvidenceVersionRepository, Depends(_evidence_versions)],
+    extractions: Annotated[ExtractionRepository, Depends(_extractions)],
 ) -> EventReviewResponse:
     replay = _replay(request)
     try:
@@ -191,12 +192,13 @@ def create_event_review(
         stored = repository.create(session)
     except EventReviewStoreConflict as error:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(error)) from error
-    return _review_response(stored)
+    return _review_response(stored, extractions)
 
 
 @router.get("/event-reviews", response_model=list[EventReviewSummaryResponse])
 def list_event_reviews(
     repository: Annotated[EventReviewRepository, Depends(_event_reviews)],
+    extractions: Annotated[ExtractionRepository, Depends(_extractions)],
 ) -> list[EventReviewSummaryResponse]:
     return [
         EventReviewSummaryResponse(
@@ -208,6 +210,10 @@ def list_event_reviews(
                 history.current_outcome is ReviewOutcome.PENDING
                 for history in stored.session.findings
             ),
+            citations_unresolved=sum(
+                not _citation_resolved(extractions, history.current_revision.finding.evidence)
+                for history in stored.session.findings
+            ),
         )
         for stored in repository.list()
     ]
@@ -217,12 +223,13 @@ def list_event_reviews(
 def get_event_review(
     event_id: str,
     repository: Annotated[EventReviewRepository, Depends(_event_reviews)],
+    extractions: Annotated[ExtractionRepository, Depends(_extractions)],
 ) -> EventReviewResponse:
     try:
         stored = repository.get(event_id)
     except EventReviewNotFound as error:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(error)) from error
-    return _review_response(stored)
+    return _review_response(stored, extractions)
 
 
 @router.get(
@@ -255,6 +262,7 @@ def create_review_decision(
     finding_id: str,
     request: ReviewDecisionRequest,
     repository: Annotated[EventReviewRepository, Depends(_event_reviews)],
+    extractions: Annotated[ExtractionRepository, Depends(_extractions)],
 ) -> EventReviewResponse:
     try:
         stored = repository.get(event_id)
@@ -281,7 +289,7 @@ def create_review_decision(
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(error)
         ) from error
-    return _review_response(updated)
+    return _review_response(updated, extractions)
 
 
 def _require_ingested(repository: EvidenceVersionRepository, reference: EvidenceReference) -> None:
@@ -293,7 +301,19 @@ def _require_ingested(repository: EvidenceVersionRepository, reference: Evidence
         )
 
 
-def _review_response(stored: StoredEventReview) -> EventReviewResponse:
+def _citation_resolved(extractions: ExtractionRepository, evidence: EvidenceReference) -> bool:
+    try:
+        record = extractions.get(evidence.document_version_id)
+    except ExtractionNotFound:
+        return False
+    return record.status is ExtractionStatus.EXTRACTED and any(
+        span.locator == evidence.locator for span in record.spans
+    )
+
+
+def _review_response(
+    stored: StoredEventReview, extractions: ExtractionRepository
+) -> EventReviewResponse:
     session = stored.session
     return EventReviewResponse(
         event_id=session.event_id,
@@ -304,6 +324,9 @@ def _review_response(stored: StoredEventReview) -> EventReviewResponse:
                 finding_id=history.current_revision.finding_id,
                 version=history.current_revision.version,
                 outcome=history.current_outcome,
+                citation_resolved=_citation_resolved(
+                    extractions, history.current_revision.finding.evidence
+                ),
                 finding=FindingResponse.model_validate(history.current_revision.finding),
             )
             for history in session.findings
