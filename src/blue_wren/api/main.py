@@ -4,12 +4,15 @@ from fastapi import FastAPI
 
 from blue_wren import __version__
 from blue_wren.api.routes import router
+from blue_wren.application.company_store import CompanyRepository
 from blue_wren.application.evidence_store import EvidenceVersionRepository
 from blue_wren.application.extraction_store import ExtractionRepository
 from blue_wren.application.review_store import EventReviewRepository
+from blue_wren.infrastructure.memory_company_store import InMemoryCompanyRepository
 from blue_wren.infrastructure.memory_evidence_store import InMemoryEvidenceVersionRepository
 from blue_wren.infrastructure.memory_extraction_store import InMemoryExtractionRepository
 from blue_wren.infrastructure.memory_review_store import InMemoryEventReviewRepository
+from blue_wren.infrastructure.sqlite_company_store import SqliteCompanyRepository
 from blue_wren.infrastructure.sqlite_evidence_store import SqliteEvidenceVersionRepository
 from blue_wren.infrastructure.sqlite_extraction_store import SqliteExtractionRepository
 from blue_wren.infrastructure.sqlite_review_store import SqliteEventReviewRepository
@@ -19,6 +22,7 @@ def create_app(
     event_reviews: EventReviewRepository | None = None,
     evidence_versions: EvidenceVersionRepository | None = None,
     extractions: ExtractionRepository | None = None,
+    companies: CompanyRepository | None = None,
 ) -> FastAPI:
     app = FastAPI(title="Blue Wren API", version=__version__)
     path = os.environ.get("BLUE_WREN_DB")
@@ -30,6 +34,9 @@ def create_app(
     )
     app.state.extractions = extractions or (
         SqliteExtractionRepository(path) if path else InMemoryExtractionRepository()
+    )
+    app.state.companies = companies or (
+        SqliteCompanyRepository(path) if path else InMemoryCompanyRepository()
     )
     app.include_router(router, prefix="/v1")
     return app
