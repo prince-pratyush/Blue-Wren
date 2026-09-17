@@ -6,9 +6,11 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 
 from blue_wren.api.main import create_app
+from blue_wren.infrastructure.memory_company_store import InMemoryCompanyRepository
 from blue_wren.infrastructure.memory_evidence_store import InMemoryEvidenceVersionRepository
 from blue_wren.infrastructure.memory_extraction_store import InMemoryExtractionRepository
 from blue_wren.infrastructure.memory_review_store import InMemoryEventReviewRepository
+from blue_wren.infrastructure.sqlite_company_store import SqliteCompanyRepository
 from blue_wren.infrastructure.sqlite_evidence_store import SqliteEvidenceVersionRepository
 from blue_wren.infrastructure.sqlite_extraction_store import SqliteExtractionRepository
 from blue_wren.infrastructure.sqlite_review_store import SqliteEventReviewRepository
@@ -55,6 +57,7 @@ def test_app_defaults_to_memory_stores(monkeypatch: pytest.MonkeyPatch) -> None:
     assert isinstance(app.state.event_reviews, InMemoryEventReviewRepository)
     assert isinstance(app.state.evidence_versions, InMemoryEvidenceVersionRepository)
     assert isinstance(app.state.extractions, InMemoryExtractionRepository)
+    assert isinstance(app.state.companies, InMemoryCompanyRepository)
 
 
 def test_app_uses_sqlite_stores_when_configured(
@@ -67,6 +70,7 @@ def test_app_uses_sqlite_stores_when_configured(
     assert isinstance(app.state.event_reviews, SqliteEventReviewRepository)
     assert isinstance(app.state.evidence_versions, SqliteEvidenceVersionRepository)
     assert isinstance(app.state.extractions, SqliteExtractionRepository)
+    assert isinstance(app.state.companies, SqliteCompanyRepository)
 
 
 @pytest.mark.anyio

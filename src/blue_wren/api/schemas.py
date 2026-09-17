@@ -155,6 +155,20 @@ class ExtractionResponse(BaseModel):
     spans: list[TextSpanResponse]
 
 
+class CompanyRequest(BaseModel):
+    company_id: Identifier
+    name: Annotated[str, Field(min_length=1, max_length=256)]
+    exchange: Annotated[str, Field(min_length=1, max_length=32)]
+
+
+class CompanyResponse(BaseModel):
+    company_id: str
+    name: str
+    exchange: str
+    events_total: int
+    findings_pending: int
+
+
 class DocumentVersionResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

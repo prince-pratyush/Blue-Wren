@@ -4,6 +4,8 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, status
 
 from blue_wren.api.schemas import (
+    CompanyRequest,
+    CompanyResponse,
     DocumentVersionResponse,
     EventReplayRequest,
     EventReplayResponse,
@@ -17,6 +19,7 @@ from blue_wren.api.schemas import (
     ReviewDecisionRequest,
     ReviewedFindingResponse,
 )
+from blue_wren.application.company_store import CompanyConflict, CompanyRepository
 from blue_wren.application.event_review import (
     EventReviewError,
     decide_event_finding,
@@ -38,6 +41,7 @@ from blue_wren.application.review_store import (
     EventReviewStoreConflict,
     StoredEventReview,
 )
+from blue_wren.domain.company import Company
 from blue_wren.domain.evidence import DocumentVersion, EvidenceIntakeError, RightsBasis
 from blue_wren.domain.extraction import (
     ExtractionError,
@@ -66,9 +70,55 @@ def _evidence_versions(request: Request) -> EvidenceVersionRepository:
     return repository
 
 
+def _companies(request: Request) -> CompanyRepository:
+    repository: CompanyRepository = request.app.state.companies
+    return repository
+
+
 def _extractions(request: Request) -> ExtractionRepository:
     repository: ExtractionRepository = request.app.state.extractions
     return repository
+
+
+@router.post("/companies", response_model=CompanyResponse, status_code=status.HTTP_201_CREATED)
+def create_company(
+    request: CompanyRequest,
+    companies: Annotated[CompanyRepository, Depends(_companies)],
+    reviews: Annotated[EventReviewRepository, Depends(_event_reviews)],
+) -> CompanyResponse:
+    try:
+        company = companies.create(
+            Company(company_id=request.company_id, name=request.name, exchange=request.exchange)
+        )
+    except CompanyConflict as error:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(error)) from error
+    return _company_response(company, reviews.list())
+
+
+@router.get("/companies", response_model=list[CompanyResponse])
+def list_companies(
+    companies: Annotated[CompanyRepository, Depends(_companies)],
+    reviews: Annotated[EventReviewRepository, Depends(_event_reviews)],
+) -> list[CompanyResponse]:
+    stored = reviews.list()
+    return [_company_response(company, stored) for company in companies.list()]
+
+
+def _company_response(
+    company: Company, reviews: tuple[StoredEventReview, ...]
+) -> CompanyResponse:
+    own = [stored for stored in reviews if stored.session.company_id == company.company_id]
+    return CompanyResponse(
+        company_id=company.company_id,
+        name=company.name,
+        exchange=company.exchange,
+        events_total=len(own),
+        findings_pending=sum(
+            history.current_outcome is ReviewOutcome.PENDING
+            for stored in own
+            for history in stored.session.findings
+        ),
+    )
 
 
 @router.post(
