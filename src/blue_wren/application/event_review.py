@@ -1,5 +1,6 @@
 from dataclasses import replace
 from datetime import datetime
+from decimal import Decimal
 from hashlib import sha256
 
 from blue_wren.application.review import create_finding_history, record_review_decision
@@ -63,6 +64,12 @@ def decide_event_finding(
         for history in session.findings
     )
     return replace(session, findings=findings)
+
+
+def materiality(finding: Finding) -> Decimal | None:
+    if finding.delta is None or finding.baseline == 0:
+        return None
+    return (abs(finding.delta) / abs(finding.baseline)).quantize(Decimal("0.000001"))
 
 
 def _finding_id(event_id: str, company_id: str, finding: Finding) -> str:
