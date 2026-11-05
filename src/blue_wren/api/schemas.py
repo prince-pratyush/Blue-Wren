@@ -51,6 +51,10 @@ class EventReplayRequest(BaseModel):
     comparisons: Annotated[list[ObservationComparisonRequest], Field(min_length=1, max_length=500)]
 
 
+class EventComparisonsRequest(BaseModel):
+    comparisons: Annotated[list[ObservationComparisonRequest], Field(min_length=1, max_length=500)]
+
+
 class EvidenceReferenceResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

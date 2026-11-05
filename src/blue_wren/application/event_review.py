@@ -36,6 +36,26 @@ def start_event_review(
     )
 
 
+def add_event_findings(
+    session: EventReviewSession,
+    replay: EventReplayResult,
+    *,
+    created_at: datetime,
+) -> EventReviewSession:
+    if (replay.event_id, replay.company_id) != (session.event_id, session.company_id):
+        raise EventReviewError("replay does not belong to this event")
+    added = tuple(
+        create_finding_history(
+            _finding_id(replay.event_id, replay.company_id, finding), finding, created_at
+        )
+        for finding in replay.findings
+    )
+    identities = [history.current_revision.finding_id for history in (*session.findings, *added)]
+    if len(set(identities)) != len(identities):
+        raise EventReviewError("duplicate finding identity")
+    return replace(session, findings=(*session.findings, *added))
+
+
 def decide_event_finding(
     session: EventReviewSession,
     *,

@@ -25,6 +25,7 @@ from blue_wren.api.schemas import (
     CompanyRequest,
     CompanyResponse,
     DocumentVersionResponse,
+    EventComparisonsRequest,
     EventReplayRequest,
     EventReplayResponse,
     EventReviewResponse,
@@ -57,6 +58,7 @@ from blue_wren.application.company_store import (
 )
 from blue_wren.application.event_review import (
     EventReviewError,
+    add_event_findings,
     decide_event_finding,
     materiality,
     start_event_review,
@@ -478,6 +480,49 @@ def create_event_review(
     except EventReviewStoreConflict as error:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(error)) from error
     return _review_response(stored, extractions)
+
+
+@router.post("/event-reviews/{event_id}/comparisons", response_model=EventReviewResponse)
+def add_event_comparisons(
+    event_id: str,
+    request: EventComparisonsRequest,
+    repository: Annotated[EventReviewRepository, Depends(_event_reviews)],
+    evidence: Annotated[EvidenceVersionRepository, Depends(_evidence_versions)],
+    extractions: Annotated[ExtractionRepository, Depends(_extractions)],
+) -> EventReviewResponse:
+    try:
+        stored = repository.get(event_id)
+    except EventReviewNotFound as error:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(error)) from error
+    replay = replay_event(
+        event_id=stored.session.event_id,
+        company_id=stored.session.company_id,
+        comparisons=tuple(_comparison(item) for item in request.comparisons),
+    )
+    try:
+        for finding in replay.findings:
+            _require_ingested(evidence, finding.evidence)
+    except (EvidenceVersionNotFound, EvidenceIntakeError) as error:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(error)
+        ) from error
+    for _ in range(3):
+        try:
+            session = add_event_findings(stored.session, replay, created_at=datetime.now(UTC))
+        except EventReviewError as error:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(error)
+            ) from error
+        try:
+            return _review_response(
+                repository.update(session, expected_revision=stored.revision), extractions
+            )
+        except EventReviewStoreConflict:
+            stored = repository.get(event_id)
+    raise HTTPException(
+        status_code=status.HTTP_409_CONFLICT,
+        detail=f"event review changed concurrently: {event_id}",
+    )
 
 
 @router.get("/event-reviews", response_model=list[EventReviewSummaryResponse])
