@@ -152,12 +152,12 @@ async def create_evidence_version(
             available_at=available_at,
             ingested_at=datetime.now(UTC),
         )
+        extractions.put(_extraction_record(version, content))
         stored = repository.put(version)
     except EvidenceIntakeError as error:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
     except EvidenceVersionConflict as error:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(error)) from error
-    extractions.put(_extraction_record(stored, content))
     return DocumentVersionResponse.model_validate(stored)
 
 
