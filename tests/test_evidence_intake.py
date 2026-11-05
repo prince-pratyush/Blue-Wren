@@ -4,7 +4,11 @@ from zipfile import ZIP_DEFLATED, ZipFile
 
 import pytest
 
-from blue_wren.application.evidence import ingest_evidence
+from blue_wren.application.evidence import (
+    MAX_XLSX_UNCOMPRESSED_BYTES,
+    XLSX_MEDIA_TYPE,
+    ingest_evidence,
+)
 from blue_wren.domain.evidence import EvidenceIntakeError, RightsBasis
 
 PUBLISHED_AT = datetime(2026, 8, 20, 8, 0, tzinfo=UTC)
@@ -237,3 +241,25 @@ def test_ingest_evidence_canonicalizes_media_type_parameters() -> None:
     )
 
     assert version.media_type == "text/plain"
+
+
+def test_intake_rejects_a_workbook_that_declares_too_much_uncompressed_data() -> None:
+    buffer = BytesIO()
+    with ZipFile(buffer, "w", ZIP_DEFLATED) as archive:
+        archive.writestr("[Content_Types].xml", "<Types/>")
+        archive.writestr("xl/workbook.xml", "<workbook/>")
+        archive.writestr("xl/worksheets/sheet1.xml", b"\0" * (MAX_XLSX_UNCOMPRESSED_BYTES + 1))
+    content = buffer.getvalue()
+    assert len(content) < 1_000_000
+
+    with pytest.raises(EvidenceIntakeError, match="uncompressed bytes"):
+        ingest_evidence(
+            document_id="acme-model",
+            content=content,
+            media_type=XLSX_MEDIA_TYPE,
+            source_name="ACME model",
+            rights_basis=RightsBasis.CUSTOMER_PROVIDED,
+            published_at=PUBLISHED_AT,
+            available_at=PUBLISHED_AT,
+            ingested_at=PUBLISHED_AT,
+        )

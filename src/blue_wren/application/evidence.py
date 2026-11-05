@@ -11,6 +11,7 @@ from blue_wren.domain.evidence import (
 
 DEFAULT_MAX_BYTES = 25_000_000
 XLSX_MEDIA_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+MAX_XLSX_UNCOMPRESSED_BYTES = 50_000_000
 SUPPORTED_MEDIA_TYPES = frozenset(
     {
         "application/pdf",
@@ -97,9 +98,14 @@ def _validate_xlsx(content: bytes) -> None:
     try:
         with ZipFile(BytesIO(content)) as archive:
             names = set(archive.namelist())
+            declared = sum(info.file_size for info in archive.infolist())
     except BadZipFile as error:
         raise EvidenceIntakeError("content does not match declared media type") from error
     if not {"[Content_Types].xml", "xl/workbook.xml"}.issubset(names):
         raise EvidenceIntakeError("content does not match declared media type")
     if "xl/vbaproject.bin" in {name.casefold() for name in names}:
         raise EvidenceIntakeError("macro-enabled workbooks are unsupported")
+    if declared > MAX_XLSX_UNCOMPRESSED_BYTES:
+        raise EvidenceIntakeError(
+            f"workbook declares {declared} uncompressed bytes, above {MAX_XLSX_UNCOMPRESSED_BYTES}"
+        )
