@@ -114,6 +114,33 @@ async def test_event_replay_requires_at_least_one_comparison(client: AsyncClient
 
 
 @pytest.mark.anyio
+async def test_prior_period_baseline_compares_across_periods(client: AsyncClient) -> None:
+    payload = deepcopy(PAYLOAD)
+    payload["comparisons"][0]["baseline"]["period"] = "2026-Q1"
+    payload["comparisons"][0]["baseline"]["value"] = "118.0"
+    payload["comparisons"][0]["baseline"]["target"] = "prior_period"
+
+    response = await client.post("/v1/event-replays", json=payload)
+
+    finding = response.json()["findings"][0]
+    assert finding["status"] == "proposed"
+    assert finding["delta"] == "7.0"
+    assert finding["baseline_target"] == "prior_period"
+
+
+@pytest.mark.anyio
+async def test_prior_period_baseline_rejects_the_same_period(client: AsyncClient) -> None:
+    payload = deepcopy(PAYLOAD)
+    payload["comparisons"][0]["baseline"]["target"] = "prior_period"
+
+    response = await client.post("/v1/event-replays", json=payload)
+
+    finding = response.json()["findings"][0]
+    assert finding["status"] == "unresolved"
+    assert finding["reason"] == "period_not_prior"
+
+
+@pytest.mark.anyio
 async def test_event_replay_exposes_an_unresolved_unit_mismatch(
     client: AsyncClient,
 ) -> None:
