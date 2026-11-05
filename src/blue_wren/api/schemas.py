@@ -4,6 +4,7 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from blue_wren.domain.analysis import ProposalRejectionCode, RunFailureCode, RunStatus
 from blue_wren.domain.evidence import RightsBasis
 from blue_wren.domain.exporting import ExportBlockerCode
 from blue_wren.domain.extraction import ExtractionStatus
@@ -169,6 +170,122 @@ class CompanyResponse(BaseModel):
     exchange: str
     events_total: int
     findings_pending: int
+
+
+class RunBudgetRequest(BaseModel):
+    max_prompt_chars: Annotated[int, Field(ge=1000, le=400_000)] = 60_000
+    max_output_tokens: Annotated[int, Field(ge=256, le=32_000)] = 4_000
+    max_provider_calls: Annotated[int, Field(ge=1, le=5)] = 2
+    max_tool_calls: Literal[0] = 0
+    max_seconds: Annotated[Decimal, Field(gt=0, le=600)] = Decimal("120")
+
+
+class AnalysisRunRequest(BaseModel):
+    event_id: Identifier
+    company_id: Identifier
+    idempotency_key: Annotated[str, Field(min_length=1, max_length=128)]
+    cutoff_at: datetime
+    source_version_ids: Annotated[
+        list[EvidenceVersionIdentifier], Field(min_length=1, max_length=50)
+    ]
+    baselines: Annotated[list[BaselineObservationRequest], Field(min_length=1, max_length=200)]
+    units: list[Identifier] = []
+    budget: RunBudgetRequest = RunBudgetRequest()
+
+
+class RunBudgetResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    max_prompt_chars: int
+    max_output_tokens: int
+    max_provider_calls: int
+    max_tool_calls: int
+    max_seconds: Decimal
+
+
+class BudgetUsageResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    prompt_chars: int
+    input_tokens: int
+    output_tokens: int
+    cache_read_input_tokens: int
+    provider_calls: int
+    tool_calls: int
+    elapsed_seconds: Decimal
+
+
+class ProviderAttemptResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    index: int
+    outcome: str
+    request_id: str | None
+    model_id: str | None
+    input_tokens: int
+    output_tokens: int
+    duration_seconds: Decimal
+
+
+class ProposedObservationResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    metric: str
+    value: Decimal
+    unit: str
+    period: str
+    basis: str
+    evidence: EvidenceReferenceResponse
+
+
+class RejectedProposalResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    code: ProposalRejectionCode
+    metric: str | None
+    document_version_id: str | None
+    locator: str | None
+    detail: str | None
+
+
+class AnalysisRunResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    run_id: str
+    event_id: str
+    company_id: str
+    idempotency_key: str
+    request_digest: str
+    scope_digest: str
+    status: RunStatus
+    failure: RunFailureCode | None
+    cutoff_at: datetime
+    source_version_ids: list[str]
+    requested_metrics: list[str]
+    provider_id: str
+    model_id: str
+    prompt_version: str
+    output_schema_version: str
+    validator_version: str
+    budget: RunBudgetResponse
+    usage: BudgetUsageResponse
+    attempts: list[ProviderAttemptResponse]
+    proposed: list[ProposedObservationResponse]
+    rejected: list[RejectedProposalResponse]
+    started_at: datetime
+    finished_at: datetime
+
+
+class AnalysisRunSummaryResponse(BaseModel):
+    run_id: str
+    event_id: str
+    status: RunStatus
+    failure: RunFailureCode | None
+    proposed_count: int
+    rejected_count: int
+    provider_calls: int
+    model_id: str
+    started_at: datetime
 
 
 class DocumentVersionResponse(BaseModel):

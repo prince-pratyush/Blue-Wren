@@ -1,9 +1,26 @@
+import secrets
+import time
 from datetime import UTC, datetime
+from decimal import Decimal
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Form,
+    HTTPException,
+    Request,
+    Response,
+    UploadFile,
+    status,
+)
 
 from blue_wren.api.schemas import (
+    AnalysisRunRequest,
+    AnalysisRunResponse,
+    AnalysisRunSummaryResponse,
+    BaselineObservationRequest,
     CompanyRequest,
     CompanyResponse,
     DocumentVersionResponse,
@@ -18,6 +35,14 @@ from blue_wren.api.schemas import (
     ObservationComparisonRequest,
     ReviewDecisionRequest,
     ReviewedFindingResponse,
+)
+from blue_wren.application.analysis import propose_observations, request_digest_for
+from blue_wren.application.analysis_provider import AnalysisProvider
+from blue_wren.application.analysis_scope import AnalysisScopeError, build_analysis_scope
+from blue_wren.application.analysis_store import (
+    AnalysisRunConflict,
+    AnalysisRunNotFound,
+    AnalysisRunRepository,
 )
 from blue_wren.application.company_store import (
     CompanyConflict,
@@ -45,6 +70,7 @@ from blue_wren.application.review_store import (
     EventReviewStoreConflict,
     StoredEventReview,
 )
+from blue_wren.domain.analysis import RunBudget
 from blue_wren.domain.company import Company
 from blue_wren.domain.evidence import DocumentVersion, EvidenceIntakeError, RightsBasis
 from blue_wren.domain.extraction import (
@@ -74,6 +100,31 @@ def _evidence_versions(request: Request) -> EvidenceVersionRepository:
     return repository
 
 
+def _analysis_runs(request: Request) -> AnalysisRunRepository:
+    repository: AnalysisRunRepository = request.app.state.analysis_runs
+    return repository
+
+
+def _analysis_provider(request: Request) -> AnalysisProvider:
+    provider: AnalysisProvider = request.app.state.analysis_provider
+    return provider
+
+
+def _analysis_model(request: Request) -> str:
+    model: str = request.app.state.analysis_model
+    return model
+
+
+class _SystemClock:
+    def now(self) -> datetime:
+        return datetime.now(UTC)
+
+
+class _SystemSleeper:
+    def sleep(self, seconds: Decimal) -> None:
+        time.sleep(float(seconds))
+
+
 def _companies(request: Request) -> CompanyRepository:
     repository: CompanyRepository = request.app.state.companies
     return repository
@@ -82,6 +133,123 @@ def _companies(request: Request) -> CompanyRepository:
 def _extractions(request: Request) -> ExtractionRepository:
     repository: ExtractionRepository = request.app.state.extractions
     return repository
+
+
+@router.post("/analysis-runs", response_model=AnalysisRunResponse)
+def create_analysis_run(
+    request: AnalysisRunRequest,
+    response: Response,
+    runs: Annotated[AnalysisRunRepository, Depends(_analysis_runs)],
+    provider: Annotated[AnalysisProvider, Depends(_analysis_provider)],
+    model_id: Annotated[str, Depends(_analysis_model)],
+    companies: Annotated[CompanyRepository, Depends(_companies)],
+    evidence: Annotated[EvidenceVersionRepository, Depends(_evidence_versions)],
+    extractions: Annotated[ExtractionRepository, Depends(_extractions)],
+) -> AnalysisRunResponse:
+    budget = RunBudget(
+        max_prompt_chars=request.budget.max_prompt_chars,
+        max_output_tokens=request.budget.max_output_tokens,
+        max_provider_calls=request.budget.max_provider_calls,
+        max_tool_calls=request.budget.max_tool_calls,
+        max_seconds=request.budget.max_seconds,
+    )
+    try:
+        companies.get(request.company_id)
+        versions = [evidence.get(version_id) for version_id in request.source_version_ids]
+        records = []
+        for version in versions:
+            try:
+                records.append(extractions.get(version.version_id))
+            except ExtractionNotFound:
+                continue
+        scope = build_analysis_scope(
+            event_id=request.event_id,
+            company_id=request.company_id,
+            cutoff_at=request.cutoff_at,
+            versions=versions,
+            extractions=records,
+            baselines=[_baseline(item) for item in request.baselines],
+            units=request.units,
+        )
+    except (CompanyNotFound, EvidenceVersionNotFound, AnalysisScopeError) as error:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(error)
+        ) from error
+
+    digest = request_digest_for(scope, model_id=model_id, budget=budget)
+    try:
+        existing = runs.get_by_idempotency_key(request.idempotency_key)
+    except AnalysisRunNotFound:
+        existing = None
+    if existing is not None:
+        if existing.request_digest != digest:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    f"idempotency key {request.idempotency_key} was used for a different request"
+                ),
+            )
+        return AnalysisRunResponse.model_validate(existing)
+
+    run = propose_observations(
+        scope,
+        provider=provider,
+        model_id=model_id,
+        budget=budget,
+        idempotency_key=request.idempotency_key,
+        clock=_SystemClock(),
+        sleeper=_SystemSleeper(),
+        nonce=secrets.token_hex(8),
+    )
+    try:
+        stored = runs.create(run)
+    except AnalysisRunConflict as error:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(error)) from error
+    response.status_code = status.HTTP_201_CREATED
+    return AnalysisRunResponse.model_validate(stored)
+
+
+@router.get("/analysis-runs", response_model=list[AnalysisRunSummaryResponse])
+def list_analysis_runs(
+    event_id: str,
+    runs: Annotated[AnalysisRunRepository, Depends(_analysis_runs)],
+) -> list[AnalysisRunSummaryResponse]:
+    return [
+        AnalysisRunSummaryResponse(
+            run_id=run.run_id,
+            event_id=run.event_id,
+            status=run.status,
+            failure=run.failure,
+            proposed_count=len(run.proposed),
+            rejected_count=len(run.rejected),
+            provider_calls=run.usage.provider_calls,
+            model_id=run.model_id,
+            started_at=run.started_at,
+        )
+        for run in runs.list_for_event(event_id)
+    ]
+
+
+@router.get("/analysis-runs/{run_id}", response_model=AnalysisRunResponse)
+def get_analysis_run(
+    run_id: str,
+    runs: Annotated[AnalysisRunRepository, Depends(_analysis_runs)],
+) -> AnalysisRunResponse:
+    try:
+        return AnalysisRunResponse.model_validate(runs.get(run_id))
+    except AnalysisRunNotFound as error:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(error)) from error
+
+
+def _baseline(item: BaselineObservationRequest) -> BaselineObservation:
+    return BaselineObservation(
+        metric=item.metric,
+        value=item.value,
+        unit=item.unit,
+        period=item.period,
+        basis=item.basis,
+        target=item.target,
+    )
 
 
 @router.post("/companies", response_model=CompanyResponse, status_code=status.HTTP_201_CREATED)
@@ -108,9 +276,7 @@ def list_companies(
     return [_company_response(company, stored) for company in companies.list()]
 
 
-def _company_response(
-    company: Company, reviews: tuple[StoredEventReview, ...]
-) -> CompanyResponse:
+def _company_response(company: Company, reviews: tuple[StoredEventReview, ...]) -> CompanyResponse:
     own = [stored for stored in reviews if stored.session.company_id == company.company_id]
     return CompanyResponse(
         company_id=company.company_id,
