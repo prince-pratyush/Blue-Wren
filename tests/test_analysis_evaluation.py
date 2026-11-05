@@ -68,6 +68,23 @@ def test_missing_rejection_is_a_critical_error(tmp_path: Path) -> None:
     assert report.rejection_recall == 0
 
 
+def test_a_broken_analysis_case_fails_alone(tmp_path: Path) -> None:
+    for suffix in (".scope.json", ".provider.json", ".expected.json"):
+        (tmp_path / f"golden_complete{suffix}").write_text(
+            (ANALYSIS / f"golden_complete{suffix}").read_text(encoding="utf-8")
+        )
+    (tmp_path / "broken.scope.json").write_text("{}", encoding="utf-8")
+    (tmp_path / "broken.provider.json").write_text("[]", encoding="utf-8")
+    (tmp_path / "broken.expected.json").write_text('{"status": "complete"}', encoding="utf-8")
+
+    suite = run_analysis_suite(tmp_path)
+
+    by_id = {result.case_id: result.report for result in suite.cases}
+    assert suite.passed is False
+    assert by_id["golden_complete"].passed is True
+    assert by_id["broken"].critical_errors[0].startswith("case error: KeyError")
+
+
 def test_discovery_requires_companions_and_cases(tmp_path: Path) -> None:
     with pytest.raises(AnalysisFixtureError, match="no analysis cases"):
         discover_analysis_cases(tmp_path)

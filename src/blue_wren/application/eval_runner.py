@@ -2,6 +2,7 @@ import json
 from dataclasses import replace
 from datetime import datetime
 from decimal import Decimal
+from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
@@ -112,21 +113,33 @@ def discover_cases(directory: Path) -> tuple[str, ...]:
 
 def run_evaluation_suite(directory: Path) -> EvaluationSuiteReport:
     results = tuple(
-        EvaluationCaseResult(
-            case_id=case_id,
-            report=run_replay_evaluation(
-                event_path=directory / f"{case_id}.json",
-                expected_path=directory / f"{case_id}.expected.json",
-                source_manifest_path=directory / f"{case_id}.sources.json",
-                restatement_path=_optional(directory / f"{case_id}.restatement.json"),
-            ),
-        )
+        EvaluationCaseResult(case_id=case_id, report=_guarded(directory, case_id))
         for case_id in discover_cases(directory)
     )
     return EvaluationSuiteReport(
         passed=all(result.report.passed for result in results),
         cases=results,
     )
+
+
+def _guarded(directory: Path, case_id: str) -> EvaluationReport:
+    try:
+        return run_replay_evaluation(
+            event_path=directory / f"{case_id}.json",
+            expected_path=directory / f"{case_id}.expected.json",
+            source_manifest_path=directory / f"{case_id}.sources.json",
+            restatement_path=_optional(directory / f"{case_id}.restatement.json"),
+        )
+    except Exception as error:  # noqa: BLE001 - one broken case must not hide the others
+        return EvaluationReport(
+            passed=False,
+            precision=Fraction(0, 1),
+            recall=Fraction(0, 1),
+            true_positives=0,
+            false_positives=0,
+            false_negatives=0,
+            critical_errors=(f"case error: {type(error).__name__}: {error}",),
+        )
 
 
 def _optional(path: Path) -> Path | None:

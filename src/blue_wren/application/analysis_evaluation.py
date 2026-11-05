@@ -78,10 +78,24 @@ def discover_analysis_cases(directory: Path) -> tuple[str, ...]:
 
 def run_analysis_suite(directory: Path) -> AnalysisSuiteReport:
     results = tuple(
-        AnalysisCaseResult(case_id, run_analysis_evaluation(directory, case_id))
+        AnalysisCaseResult(case_id, _guarded(directory, case_id))
         for case_id in discover_analysis_cases(directory)
     )
     return AnalysisSuiteReport(all(result.report.passed for result in results), results)
+
+
+def _guarded(directory: Path, case_id: str) -> AnalysisEvaluationReport:
+    try:
+        return run_analysis_evaluation(directory, case_id)
+    except Exception as error:  # noqa: BLE001 - one broken case must not hide the others
+        return AnalysisEvaluationReport(
+            passed=False,
+            status=None,
+            observation_accuracy=Fraction(0, 1),
+            rejection_recall=Fraction(0, 1),
+            coverage=Fraction(0, 1),
+            critical_errors=(f"case error: {type(error).__name__}: {error}",),
+        )
 
 
 def run_analysis_evaluation(directory: Path, case_id: str) -> AnalysisEvaluationReport:
