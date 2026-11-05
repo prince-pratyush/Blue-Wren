@@ -79,6 +79,7 @@ async def test_event_replay_returns_an_evidence_linked_finding(
                 "reason": None,
                 "baseline_normalization": None,
                 "baseline_target": "estimate",
+                "segment": None,
             }
         ],
     }
@@ -111,6 +112,23 @@ async def test_event_replay_requires_at_least_one_comparison(client: AsyncClient
     response = await client.post("/v1/event-replays", json=payload)
 
     assert response.status_code == 422
+
+
+@pytest.mark.anyio
+async def test_segment_observations_compare_only_within_the_segment(client: AsyncClient) -> None:
+    payload = deepcopy(PAYLOAD)
+    payload["comparisons"][0]["actual"]["segment"] = "Retail"
+    payload["comparisons"][0]["baseline"]["segment"] = "Retail"
+    crossed = deepcopy(payload)
+    crossed["comparisons"][0]["baseline"]["segment"] = "Wholesale"
+
+    matched = await client.post("/v1/event-replays", json=payload)
+    mismatched = await client.post("/v1/event-replays", json=crossed)
+
+    assert matched.json()["findings"][0]["status"] == "proposed"
+    assert matched.json()["findings"][0]["segment"] == "Retail"
+    assert mismatched.json()["findings"][0]["status"] == "unresolved"
+    assert mismatched.json()["findings"][0]["reason"] == "segment_mismatch"
 
 
 @pytest.mark.anyio

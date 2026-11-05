@@ -29,6 +29,7 @@ class ReportedObservationRequest(BaseModel):
     period: Identifier
     basis: Identifier
     evidence: EvidenceReferenceRequest
+    segment: Identifier | None = None
 
 
 class BaselineObservationRequest(BaseModel):
@@ -38,6 +39,7 @@ class BaselineObservationRequest(BaseModel):
     period: Identifier
     basis: Identifier
     target: Literal["estimate", "consensus", "guidance", "prior_period"] = "estimate"
+    segment: Identifier | None = None
 
 
 class ObservationComparisonRequest(BaseModel):
@@ -83,6 +85,7 @@ class FindingResponse(BaseModel):
     reason: str | None
     baseline_normalization: FinancialNormalizationResponse | None
     baseline_target: str
+    segment: str | None
 
 
 class EventReplayResponse(BaseModel):

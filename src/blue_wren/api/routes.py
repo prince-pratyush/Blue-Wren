@@ -310,6 +310,7 @@ def _baseline(item: BaselineObservationRequest) -> BaselineObservation:
         period=item.period,
         basis=item.basis,
         target=item.target,
+        segment=item.segment,
     )
 
 
@@ -717,6 +718,7 @@ def _comparison(
             document_version_id=item.actual.evidence.document_version_id,
             locator=item.actual.evidence.locator,
         ),
+        segment=item.actual.segment,
     )
     baseline = BaselineObservation(
         metric=item.baseline.metric,
@@ -725,5 +727,6 @@ def _comparison(
         period=item.baseline.period,
         basis=item.baseline.basis,
         target=item.baseline.target,
+        segment=item.baseline.segment,
     )
     return actual, baseline

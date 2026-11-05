@@ -83,6 +83,7 @@ def _finding_id(event_id: str, company_id: str, finding: Finding) -> str:
             finding.period,
             finding.basis,
             finding.baseline_target,
+            finding.segment or "",
             evidence.document_id,
             evidence.document_version_id,
             evidence.locator,

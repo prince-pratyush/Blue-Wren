@@ -20,6 +20,7 @@ class ExpectedFinding:
     evidence_document_version_id: str
     status: FindingStatus
     baseline_target: str = "estimate"
+    segment: str | None = None
     review_outcome: ReviewOutcome | None = None
 
 

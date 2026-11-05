@@ -162,6 +162,7 @@ def _expected_finding(payload: dict[str, Any]) -> ExpectedFinding:
         evidence_document_version_id=payload["evidence_document_version_id"],
         status=FindingStatus(payload["status"]),
         baseline_target=payload.get("baseline_target", "estimate"),
+        segment=payload.get("segment"),
     )
 
 

@@ -34,6 +34,7 @@ class ReportedObservation:
     period: str
     basis: str
     evidence: EvidenceReference
+    segment: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -44,6 +45,7 @@ class BaselineObservation:
     period: str
     basis: str
     target: str = "estimate"
+    segment: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -60,6 +62,7 @@ class Finding:
     reason: str | None = None
     baseline_normalization: FinancialNormalization | None = None
     baseline_target: str = "estimate"
+    segment: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -88,6 +91,7 @@ def compare_observations(
             status=FindingStatus.UNRESOLVED,
             reason=mismatch,
             baseline_target=baseline.target,
+            segment=actual.segment,
         )
 
     normalized_baseline = convert_financial_value(
@@ -108,6 +112,7 @@ def compare_observations(
             status=FindingStatus.UNRESOLVED,
             reason="unit_mismatch",
             baseline_target=baseline.target,
+            segment=actual.segment,
         )
 
     return Finding(
@@ -131,6 +136,7 @@ def compare_observations(
             else None
         ),
         baseline_target=baseline.target,
+        segment=actual.segment,
     )
 
 
@@ -140,6 +146,8 @@ def _comparison_mismatch(
 ) -> str | None:
     if actual.metric != baseline.metric:
         return "metric_mismatch"
+    if actual.segment != baseline.segment:
+        return "segment_mismatch"
     if baseline.target == "prior_period":
         if actual.period == baseline.period:
             return "period_not_prior"

@@ -1,4 +1,5 @@
 import json
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta, timezone
 from decimal import Decimal
 from pathlib import Path
@@ -90,6 +91,24 @@ def test_round_trip_preserves_decimal_text_and_normalization() -> None:
     assert finding.baseline_normalization is not None
     assert finding.baseline_normalization.source_unit == "AUD_thousands"
     assert decoded == session
+
+
+def test_round_trip_preserves_segment() -> None:
+    session = _rich_session()
+    history = session.findings[0]
+    finding = replace(history.current_revision.finding, segment="Retail")
+    segmented = EventReviewSession(
+        session.event_id,
+        session.company_id,
+        (replace(history, revisions=(replace(history.current_revision, finding=finding),)),),
+    )
+
+    decoded = decode_session(encode_session(segmented))
+
+    assert decoded.findings[0].current_revision.finding.segment == "Retail"
+    assert (
+        decode_session(encode_session(session)).findings[0].current_revision.finding.segment is None
+    )
 
 
 def test_decode_rejects_unknown_schema_version() -> None:

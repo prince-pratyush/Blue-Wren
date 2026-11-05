@@ -79,5 +79,6 @@ def _mismatches(expected: ExpectedFinding, emitted: Finding) -> tuple[str, ...]:
         ),
         ("status", expected.status == emitted.status),
         ("baseline target", expected.baseline_target == emitted.baseline_target),
+        ("segment", expected.segment == emitted.segment),
     )
     return tuple(name for name, matches in fields if not matches)

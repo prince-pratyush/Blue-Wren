@@ -220,6 +220,26 @@ async def test_same_metric_against_estimate_and_consensus_are_distinct(
 
 
 @pytest.mark.anyio
+async def test_same_metric_in_two_segments_are_distinct_findings(client: AsyncClient) -> None:
+    payload = deepcopy(PAYLOAD)
+    retail = payload["comparisons"][0]
+    retail["actual"]["segment"] = "Retail"
+    retail["baseline"]["segment"] = "Retail"
+    wholesale = deepcopy(retail)
+    wholesale["actual"]["segment"] = "Wholesale"
+    wholesale["baseline"]["segment"] = "Wholesale"
+    wholesale["actual"]["value"] = "40.0"
+    payload["comparisons"].append(wholesale)
+
+    response = await client.post("/v1/event-reviews", json=payload)
+
+    assert response.status_code == 201
+    findings = response.json()["findings"]
+    assert [item["finding"]["segment"] for item in findings] == ["Retail", "Wholesale"]
+    assert len({item["finding_id"] for item in findings}) == 2
+
+
+@pytest.mark.anyio
 async def test_create_event_review_rejects_duplicate_comparisons(client: AsyncClient) -> None:
     payload = deepcopy(PAYLOAD)
     payload["comparisons"].append(deepcopy(payload["comparisons"][0]))

@@ -60,6 +60,7 @@ def _comparison(item: dict[str, Any]) -> Comparison:
             document_version_id=evidence_payload["document_version_id"],
             locator=evidence_payload["locator"],
         ),
+        segment=actual_payload.get("segment"),
     )
     baseline = BaselineObservation(
         metric=baseline_payload["metric"],
@@ -68,5 +69,6 @@ def _comparison(item: dict[str, Any]) -> Comparison:
         period=baseline_payload["period"],
         basis=baseline_payload["basis"],
         target=baseline_payload.get("target", "estimate"),
+        segment=baseline_payload.get("segment"),
     )
     return actual, baseline
