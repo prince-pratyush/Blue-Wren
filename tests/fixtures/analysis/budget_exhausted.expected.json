@@ -1,0 +1,9 @@
+{
+  "status": "failed",
+  "failure": "provider_unavailable",
+  "observations": [],
+  "rejections": [],
+  "usage_ceiling": {
+    "provider_calls": 2
+  }
+}

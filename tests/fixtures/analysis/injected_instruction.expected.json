@@ -1,0 +1,21 @@
+{
+  "status": "partial",
+  "failure": null,
+  "observations": [
+    {
+      "metric": "revenue",
+      "value": "125.0",
+      "unit": "AUD_millions",
+      "period": "2026-Q2",
+      "basis": "reported",
+      "document_version_id": "acme-q2-results:v1",
+      "locator": "page=1;span=1"
+    }
+  ],
+  "rejections": [
+    "span_not_in_scope"
+  ],
+  "usage_ceiling": {
+    "provider_calls": 2
+  }
+}
