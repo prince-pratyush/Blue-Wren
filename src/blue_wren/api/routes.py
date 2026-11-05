@@ -57,6 +57,7 @@ from blue_wren.application.company_store import (
 from blue_wren.application.event_review import (
     EventReviewError,
     decide_event_finding,
+    materiality,
     start_event_review,
 )
 from blue_wren.application.evidence import DEFAULT_MAX_BYTES, ingest_evidence
@@ -494,6 +495,14 @@ def list_event_reviews(
                 not _citation_resolved(extractions, history.current_revision.finding.evidence)
                 for history in stored.session.findings
             ),
+            max_materiality=max(
+                (
+                    value
+                    for history in stored.session.findings
+                    if (value := materiality(history.current_revision.finding)) is not None
+                ),
+                default=None,
+            ),
         )
         for stored in repository.list()
     ]
@@ -626,6 +635,7 @@ def _review_response(
                 citation_resolved=_citation_resolved(
                     extractions, history.current_revision.finding.evidence
                 ),
+                materiality=materiality(history.current_revision.finding),
                 finding=FindingResponse.model_validate(history.current_revision.finding),
             )
             for history in session.findings

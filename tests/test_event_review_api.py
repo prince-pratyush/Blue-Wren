@@ -94,6 +94,24 @@ async def test_create_event_review_rejects_duplicate_event(client: AsyncClient) 
 
 
 @pytest.mark.anyio
+async def test_findings_carry_materiality_and_unresolved_ones_do_not(client: AsyncClient) -> None:
+    payload = deepcopy(PAYLOAD)
+    mismatch = deepcopy(payload["comparisons"][0])
+    mismatch["actual"]["metric"] = "ebitda"
+    mismatch["baseline"]["metric"] = "ebitda"
+    mismatch["baseline"]["basis"] = "underlying"
+    payload["comparisons"].append(mismatch)
+
+    response = await client.post("/v1/event-reviews", json=payload)
+
+    findings = response.json()["findings"]
+    assert findings[0]["materiality"] == "0.041667"
+    assert findings[1]["materiality"] is None
+    listed = await client.get("/v1/event-reviews")
+    assert listed.json()[0]["max_materiality"] == "0.041667"
+
+
+@pytest.mark.anyio
 async def test_citation_is_unresolved_without_extracted_span(client: AsyncClient) -> None:
     response = await client.post("/v1/event-reviews", json=PAYLOAD)
 
@@ -292,6 +310,7 @@ async def test_list_event_reviews_returns_ordered_summaries(client: AsyncClient)
             "findings_total": 1,
             "findings_pending": 0,
             "citations_unresolved": 1,
+            "max_materiality": "0.041667",
         },
         {
             "event_id": "zeta-q2-2026",
@@ -300,6 +319,7 @@ async def test_list_event_reviews_returns_ordered_summaries(client: AsyncClient)
             "findings_total": 1,
             "findings_pending": 1,
             "citations_unresolved": 1,
+            "max_materiality": "0.041667",
         },
     ]
 

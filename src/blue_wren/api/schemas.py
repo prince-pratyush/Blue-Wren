@@ -106,6 +106,7 @@ class ReviewedFindingResponse(BaseModel):
     version: int
     outcome: ReviewOutcome
     citation_resolved: bool
+    materiality: Decimal | None
     finding: FindingResponse
 
 
@@ -123,6 +124,7 @@ class EventReviewSummaryResponse(BaseModel):
     findings_total: int
     findings_pending: int
     citations_unresolved: int
+    max_materiality: Decimal | None
 
 
 class ExportBlockerResponse(BaseModel):

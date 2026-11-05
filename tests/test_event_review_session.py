@@ -1,5 +1,6 @@
 from dataclasses import replace
 from datetime import UTC, datetime
+from decimal import Decimal
 from pathlib import Path
 
 import pytest
@@ -7,6 +8,7 @@ import pytest
 from blue_wren.application.event_review import (
     EventReviewError,
     decide_event_finding,
+    materiality,
     start_event_review,
 )
 from blue_wren.application.exporting import assess_checked_export
@@ -16,6 +18,16 @@ from blue_wren.domain.review import ReviewOutcome
 
 FIXTURE = Path(__file__).parent / "fixtures" / "acme_q2_2026.json"
 NOW = datetime(2026, 9, 15, 3, 0, tzinfo=UTC)
+
+
+def test_materiality_is_relative_delta_or_absent() -> None:
+    replay = replay_event_fixture(FIXTURE)
+    finding = replay.findings[0]
+
+    assert materiality(finding) == Decimal("0.041667")
+    assert materiality(replace(finding, delta=None)) is None
+    assert materiality(replace(finding, baseline=Decimal("0"))) is None
+    assert materiality(replace(finding, delta=Decimal("-6.0"))) == Decimal("0.05")
 
 
 def test_start_event_review_assigns_stable_finding_identities() -> None:
