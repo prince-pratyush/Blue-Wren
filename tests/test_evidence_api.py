@@ -1,12 +1,19 @@
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
+from hashlib import sha256
 
 import pytest
 from httpx import ASGITransport, AsyncClient
 
 from blue_wren.api.main import create_app
+from blue_wren.application.evidence_store import EvidenceVersionNotFound
+from blue_wren.domain.evidence import DocumentVersion
+from blue_wren.domain.extraction import ExtractionStatus
+from blue_wren.infrastructure.memory_evidence_store import InMemoryEvidenceVersionRepository
+from blue_wren.infrastructure.memory_extraction_store import InMemoryExtractionRepository
 
 PDF_CONTENT = b"%PDF-1.7\nQuarterly results"
+TEXT_CONTENT = b"Revenue was 125.0 million.\n"
 
 
 @pytest.fixture
@@ -124,6 +131,30 @@ async def test_upload_records_failed_extraction_for_unreadable_pdf(
     assert body["status"] == "failed"
     assert body["reason"].startswith("could not read pdf")
     assert body["spans"] == []
+
+
+class _FailingEvidenceStore(InMemoryEvidenceVersionRepository):
+    def put(self, version: DocumentVersion) -> DocumentVersion:
+        raise RuntimeError("storage unavailable")
+
+
+@pytest.mark.anyio
+async def test_extraction_is_stored_before_the_version() -> None:
+    extractions = InMemoryExtractionRepository()
+    evidence = _FailingEvidenceStore()
+    app = create_app(evidence_versions=evidence, extractions=extractions)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        with pytest.raises(RuntimeError, match="storage unavailable"):
+            await client.post(
+                "/v1/evidence/versions",
+                data=_form(),
+                files={"file": ("results.txt", TEXT_CONTENT, "text/plain")},
+            )
+
+    version_id = f"acme-q2-results:{sha256(TEXT_CONTENT).hexdigest()}"
+    assert extractions.get(version_id).status is ExtractionStatus.EXTRACTED
+    with pytest.raises(EvidenceVersionNotFound):
+        evidence.get(version_id)
 
 
 @pytest.mark.anyio
