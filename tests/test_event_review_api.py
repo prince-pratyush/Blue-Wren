@@ -220,6 +220,49 @@ async def test_same_metric_against_estimate_and_consensus_are_distinct(
 
 
 @pytest.mark.anyio
+async def test_later_comparisons_append_without_disturbing_decisions(client: AsyncClient) -> None:
+    created = await client.post("/v1/event-reviews", json=PAYLOAD)
+    finding_id = created.json()["findings"][0]["finding_id"]
+    await client.post(
+        f"/v1/event-reviews/acme-q2-2026/findings/{finding_id}/decisions",
+        json={"expected_version": 1, "outcome": "accepted", "reviewer_id": "analyst-7"},
+    )
+    ebitda = deepcopy(PAYLOAD["comparisons"][0])
+    ebitda["actual"]["metric"] = "ebitda"
+    ebitda["baseline"]["metric"] = "ebitda"
+
+    response = await client.post(
+        "/v1/event-reviews/acme-q2-2026/comparisons", json={"comparisons": [ebitda]}
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["revision"] == 3
+    assert [item["finding"]["metric"] for item in body["findings"]] == ["revenue", "ebitda"]
+    assert [item["outcome"] for item in body["findings"]] == ["accepted", "pending"]
+    listed = await client.get("/v1/event-reviews")
+    assert listed.json()[0]["findings_total"] == 2
+    assert listed.json()[0]["findings_pending"] == 1
+
+
+@pytest.mark.anyio
+async def test_later_comparisons_reject_duplicates_and_unknown_events(client: AsyncClient) -> None:
+    await client.post("/v1/event-reviews", json=PAYLOAD)
+
+    duplicate = await client.post(
+        "/v1/event-reviews/acme-q2-2026/comparisons",
+        json={"comparisons": PAYLOAD["comparisons"]},
+    )
+    missing = await client.post(
+        "/v1/event-reviews/missing/comparisons", json={"comparisons": PAYLOAD["comparisons"]}
+    )
+
+    assert duplicate.status_code == 422
+    assert duplicate.json()["detail"] == "duplicate finding identity"
+    assert missing.status_code == 404
+
+
+@pytest.mark.anyio
 async def test_create_event_review_rejects_duplicate_comparisons(client: AsyncClient) -> None:
     payload = deepcopy(PAYLOAD)
     payload["comparisons"].append(deepcopy(payload["comparisons"][0]))
