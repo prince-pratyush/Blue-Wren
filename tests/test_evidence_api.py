@@ -221,7 +221,7 @@ async def test_create_evidence_version_rejects_an_empty_file(client: AsyncClient
         files={"file": ("results.pdf", b"", "application/pdf")},
     )
 
-    assert response.status_code == 400
+    assert response.status_code == 422
     assert response.json() == {"detail": "document is empty"}
 
 
@@ -256,5 +256,5 @@ async def test_create_evidence_version_rejects_disguised_pdf(client: AsyncClient
         files={"file": ("results.pdf", b"not a pdf", "application/pdf")},
     )
 
-    assert response.status_code == 400
+    assert response.status_code == 422
     assert response.json() == {"detail": "content does not match declared media type"}
