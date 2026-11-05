@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from datetime import datetime
+from decimal import Decimal
 
 from blue_wren.domain.findings import BaselineObservation
 
@@ -23,3 +24,12 @@ class AnalysisScope:
     units: tuple[str, ...]
     spans: tuple[SourceSpan, ...]
     baselines: tuple[BaselineObservation, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class RunBudget:
+    max_prompt_chars: int
+    max_output_tokens: int
+    max_provider_calls: int
+    max_tool_calls: int
+    max_seconds: Decimal
