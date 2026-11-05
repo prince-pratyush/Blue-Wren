@@ -14,4 +14,4 @@ test:
 	uv run --no-sync coverage report
 
 eval-smoke:
-	uv run --no-sync python -m blue_wren.cli.eval_smoke tests/fixtures
+	uv run --no-sync python -m blue_wren.cli.eval_smoke tests/fixtures --analysis tests/fixtures/analysis

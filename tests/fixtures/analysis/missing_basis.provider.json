@@ -1,0 +1,5 @@
+[
+  {
+    "text": "{\"observations\": [{\"metric\": \"revenue\", \"value_text\": \"125.0\", \"unit\": \"AUD_millions\", \"period\": \"2026-Q2\", \"basis\": \"reported\", \"document_version_id\": \"acme-q2-results:v1\", \"locator\": \"page=1;span=1\"}, {\"metric\": \"ebitda\", \"value_text\": \"30.0\", \"unit\": \"AUD_millions\", \"period\": \"2026-Q2\", \"basis\": \"\", \"document_version_id\": \"acme-q2-results:v1\", \"locator\": \"page=1;span=2\"}]}"
+  }
+]
