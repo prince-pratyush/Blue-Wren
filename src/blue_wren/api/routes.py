@@ -382,7 +382,9 @@ async def create_evidence_version(
         extractions.put(_extraction_record(version, content))
         stored = repository.put(version)
     except EvidenceIntakeError as error:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(error)
+        ) from error
     except EvidenceVersionConflict as error:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(error)) from error
     return DocumentVersionResponse.model_validate(stored)
@@ -632,6 +634,11 @@ def _apply_decision(
 ) -> StoredEventReview:
     for _ in range(3):
         stored = repository.get(event_id)
+        if not any(
+            history.current_revision.finding_id == finding_id
+            for history in stored.session.findings
+        ):
+            raise EventReviewError(f"finding not found: {finding_id}")
         pinned = request.expected_revision
         if pinned is not None and stored.revision != pinned:
             raise EventReviewStoreConflict(

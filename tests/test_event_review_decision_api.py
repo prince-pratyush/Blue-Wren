@@ -119,6 +119,16 @@ async def test_unpinned_decision_still_rejects_a_reviewed_finding(client: AsyncC
 
 
 @pytest.mark.anyio
+async def test_unknown_finding_wins_over_a_stale_pin(client: AsyncClient) -> None:
+    finding_id = await _create(client)
+    await client.post(_url(finding_id), json={**DECISION, "outcome": "deferred"})
+
+    response = await client.post(_url("finding-missing"), json=DECISION)
+
+    assert response.status_code == 404
+
+
+@pytest.mark.anyio
 async def test_decision_rejects_stale_revision(client: AsyncClient) -> None:
     finding_id = await _create(client)
     await client.post(_url(finding_id), json={**DECISION, "outcome": "deferred"})
