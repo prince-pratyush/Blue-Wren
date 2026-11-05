@@ -292,6 +292,49 @@ class AnalysisRunSummaryResponse(BaseModel):
     started_at: datetime
 
 
+class ExportedSourceResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    document_id: str
+    document_version_id: str
+    content_sha256: str
+    source_name: str
+    published_at: datetime
+    available_at: datetime
+
+
+class ExportedFindingResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    finding_id: str
+    version: int
+    metric: str
+    actual: Decimal
+    baseline: Decimal
+    delta: Decimal
+    unit: str
+    period: str
+    basis: str
+    baseline_target: str
+    reviewer_id: str
+    decided_at: datetime
+    document_id: str
+    document_version_id: str
+    locator: str
+    evidence_text: str
+
+
+class ExportManifestResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    event_id: str
+    company_id: str
+    revision: int
+    generated_at: datetime
+    findings: list[ExportedFindingResponse]
+    sources: list[ExportedSourceResponse]
+
+
 class DocumentVersionResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

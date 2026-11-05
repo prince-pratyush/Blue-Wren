@@ -1,9 +1,16 @@
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
+from datetime import datetime
 
+from blue_wren.application.review_store import StoredEventReview
+from blue_wren.domain.evidence import DocumentVersion
 from blue_wren.domain.exporting import (
     CheckedExportReadiness,
+    ExportBlocked,
     ExportBlocker,
     ExportBlockerCode,
+    ExportedFinding,
+    ExportedSource,
+    ExportManifest,
 )
 from blue_wren.domain.findings import EvidenceReference, FindingStatus
 from blue_wren.domain.review import FindingHistory, ReviewOutcome
@@ -47,3 +54,66 @@ def _export_blocker(history: FindingHistory) -> ExportBlocker | None:
     if code is None:
         return None
     return ExportBlocker(finding_id=current.finding_id, code=code)
+
+
+def build_export_manifest(
+    stored: StoredEventReview,
+    *,
+    generated_at: datetime,
+    versions: Mapping[str, DocumentVersion],
+    spans: Mapping[tuple[str, str], str],
+    citation_resolved: Callable[[EvidenceReference], bool],
+) -> ExportManifest:
+    readiness = assess_checked_export(stored.session.findings, citation_resolved=citation_resolved)
+    if not readiness.allowed:
+        raise ExportBlocked(readiness.blockers)
+    findings = []
+    for history in stored.session.findings:
+        current = history.current_revision
+        finding = current.finding
+        decision = next(
+            item for item in reversed(history.decisions) if item.finding_version == current.version
+        )
+        evidence = finding.evidence
+        if finding.delta is None:
+            raise ExportBlocked((ExportBlocker(current.finding_id, ExportBlockerCode.UNRESOLVED),))
+        findings.append(
+            ExportedFinding(
+                finding_id=current.finding_id,
+                version=current.version,
+                metric=finding.metric,
+                actual=finding.actual,
+                baseline=finding.baseline,
+                delta=finding.delta,
+                unit=finding.unit,
+                period=finding.period,
+                basis=finding.basis,
+                baseline_target=finding.baseline_target,
+                reviewer_id=decision.reviewer_id,
+                decided_at=decision.decided_at,
+                document_id=evidence.document_id,
+                document_version_id=evidence.document_version_id,
+                locator=evidence.locator,
+                evidence_text=spans[(evidence.document_version_id, evidence.locator)],
+            )
+        )
+    cited = sorted({item.document_version_id for item in findings})
+    sources = tuple(
+        ExportedSource(
+            document_id=versions[version_id].document_id,
+            document_version_id=version_id,
+            content_sha256=versions[version_id].content_sha256,
+            source_name=versions[version_id].source_name,
+            published_at=versions[version_id].published_at,
+            available_at=versions[version_id].available_at,
+        )
+        for version_id in cited
+    )
+    return ExportManifest(
+        event_id=stored.session.event_id,
+        company_id=stored.session.company_id,
+        revision=stored.revision,
+        generated_at=generated_at,
+        findings=tuple(findings),
+        sources=sources,
+    )

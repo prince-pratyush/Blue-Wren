@@ -30,6 +30,7 @@ from blue_wren.api.schemas import (
     EventReviewResponse,
     EventReviewSummaryResponse,
     ExportBlockerResponse,
+    ExportManifestResponse,
     ExportReadinessResponse,
     ExtractionResponse,
     FindingResponse,
@@ -65,7 +66,7 @@ from blue_wren.application.evidence_store import (
     EvidenceVersionNotFound,
     EvidenceVersionRepository,
 )
-from blue_wren.application.exporting import assess_checked_export
+from blue_wren.application.exporting import assess_checked_export, build_export_manifest
 from blue_wren.application.extraction import extract_text
 from blue_wren.application.extraction_store import ExtractionNotFound, ExtractionRepository
 from blue_wren.application.replay import replay_event
@@ -78,6 +79,7 @@ from blue_wren.application.review_store import (
 from blue_wren.domain.analysis import RunBudget, RunStatus
 from blue_wren.domain.company import Company
 from blue_wren.domain.evidence import DocumentVersion, EvidenceIntakeError, RightsBasis
+from blue_wren.domain.exporting import ExportBlocked
 from blue_wren.domain.extraction import (
     ExtractionError,
     ExtractionRecord,
@@ -535,6 +537,49 @@ def get_export_readiness(
         allowed=readiness.allowed,
         blockers=[ExportBlockerResponse.model_validate(blocker) for blocker in readiness.blockers],
     )
+
+
+@router.post("/event-reviews/{event_id}/exports", response_model=ExportManifestResponse)
+def create_export(
+    event_id: str,
+    repository: Annotated[EventReviewRepository, Depends(_event_reviews)],
+    evidence: Annotated[EvidenceVersionRepository, Depends(_evidence_versions)],
+    extractions: Annotated[ExtractionRepository, Depends(_extractions)],
+) -> ExportManifestResponse:
+    try:
+        stored = repository.get(event_id)
+    except EventReviewNotFound as error:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(error)) from error
+    cited = {
+        history.current_revision.finding.evidence.document_version_id
+        for history in stored.session.findings
+    }
+    versions: dict[str, DocumentVersion] = {}
+    spans: dict[tuple[str, str], str] = {}
+    for version_id in cited:
+        try:
+            versions[version_id] = evidence.get(version_id)
+            record = extractions.get(version_id)
+        except (EvidenceVersionNotFound, ExtractionNotFound):
+            continue
+        spans.update({(version_id, span.locator): span.text for span in record.spans})
+    try:
+        manifest = build_export_manifest(
+            stored,
+            generated_at=datetime.now(UTC),
+            versions=versions,
+            spans=spans,
+            citation_resolved=lambda reference: _citation_resolved(extractions, reference),
+        )
+    except ExportBlocked as error:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=[
+                {"finding_id": blocker.finding_id, "code": blocker.code.value}
+                for blocker in error.blockers
+            ],
+        ) from error
+    return ExportManifestResponse.model_validate(manifest)
 
 
 @router.post(
