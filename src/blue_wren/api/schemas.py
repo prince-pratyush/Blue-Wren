@@ -193,6 +193,10 @@ class AnalysisRunRequest(BaseModel):
     budget: RunBudgetRequest = RunBudgetRequest()
 
 
+class AnalysisReviewRequest(BaseModel):
+    baselines: Annotated[list[BaselineObservationRequest], Field(min_length=1, max_length=200)]
+
+
 class RunBudgetResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

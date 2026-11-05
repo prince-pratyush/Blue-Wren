@@ -17,6 +17,7 @@ from fastapi import (
 )
 
 from blue_wren.api.schemas import (
+    AnalysisReviewRequest,
     AnalysisRunRequest,
     AnalysisRunResponse,
     AnalysisRunSummaryResponse,
@@ -38,7 +39,11 @@ from blue_wren.api.schemas import (
 )
 from blue_wren.application.analysis import propose_observations, request_digest_for
 from blue_wren.application.analysis_provider import AnalysisProvider
-from blue_wren.application.analysis_scope import AnalysisScopeError, build_analysis_scope
+from blue_wren.application.analysis_scope import (
+    AnalysisScopeError,
+    baseline_digest,
+    build_analysis_scope,
+)
 from blue_wren.application.analysis_store import (
     AnalysisRunConflict,
     AnalysisRunNotFound,
@@ -70,7 +75,7 @@ from blue_wren.application.review_store import (
     EventReviewStoreConflict,
     StoredEventReview,
 )
-from blue_wren.domain.analysis import RunBudget
+from blue_wren.domain.analysis import RunBudget, RunStatus
 from blue_wren.domain.company import Company
 from blue_wren.domain.evidence import DocumentVersion, EvidenceIntakeError, RightsBasis
 from blue_wren.domain.extraction import (
@@ -239,6 +244,59 @@ def get_analysis_run(
         return AnalysisRunResponse.model_validate(runs.get(run_id))
     except AnalysisRunNotFound as error:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(error)) from error
+
+
+@router.post(
+    "/analysis-runs/{run_id}/event-review",
+    response_model=EventReviewResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_review_from_run(
+    run_id: str,
+    request: AnalysisReviewRequest,
+    runs: Annotated[AnalysisRunRepository, Depends(_analysis_runs)],
+    reviews: Annotated[EventReviewRepository, Depends(_event_reviews)],
+    evidence: Annotated[EvidenceVersionRepository, Depends(_evidence_versions)],
+    extractions: Annotated[ExtractionRepository, Depends(_extractions)],
+) -> EventReviewResponse:
+    try:
+        run = runs.get(run_id)
+    except AnalysisRunNotFound as error:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(error)) from error
+    if run.status is RunStatus.FAILED:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail=f"run {run_id} failed: {run.failure}"
+        )
+    baselines = [_baseline(item) for item in request.baselines]
+    if baseline_digest(baselines) != run.baseline_digest:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="baselines do not match the run",
+        )
+    comparisons = tuple(
+        (observation, baseline)
+        for observation in run.proposed
+        for baseline in baselines
+        if baseline.metric == observation.metric
+    )
+    if not comparisons:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail=f"run {run_id} proposed nothing to review"
+        )
+    replay = replay_event(event_id=run.event_id, company_id=run.company_id, comparisons=comparisons)
+    try:
+        for finding in replay.findings:
+            _require_ingested(evidence, finding.evidence)
+        session = start_event_review(replay, created_at=datetime.now(UTC))
+    except (EvidenceVersionNotFound, EvidenceIntakeError, EventReviewError) as error:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(error)
+        ) from error
+    try:
+        stored = reviews.create(session)
+    except EventReviewStoreConflict as error:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(error)) from error
+    return _review_response(stored, extractions)
 
 
 def _baseline(item: BaselineObservationRequest) -> BaselineObservation:
