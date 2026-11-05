@@ -8,6 +8,7 @@ from blue_wren.application.eval_runner import (
     EvaluationFixtureError,
     discover_cases,
     load_expected_findings,
+    run_evaluation_suite,
     run_replay_evaluation,
 )
 from blue_wren.cli.eval_smoke import main
@@ -145,6 +146,22 @@ def test_restatement_of_another_document_leaves_the_finding_pending(tmp_path: Pa
 
     assert report.passed is False
     assert report.critical_errors == ("revenue: review outcome mismatch",)
+
+
+def test_a_broken_case_fails_alone_without_aborting_the_suite(tmp_path: Path) -> None:
+    for name in ("acme_q2_2026.json", "acme_q2_2026.expected.json", "acme_q2_2026.sources.json"):
+        (tmp_path / name).write_text((FIXTURES / name).read_text(encoding="utf-8"))
+    (tmp_path / "broken.json").write_text('{"event_id": "broken"}', encoding="utf-8")
+    (tmp_path / "broken.expected.json").write_text('{"findings": []}', encoding="utf-8")
+    (tmp_path / "broken.sources.json").write_text("{}", encoding="utf-8")
+
+    suite = run_evaluation_suite(tmp_path)
+
+    by_id = {result.case_id: result.report for result in suite.cases}
+    assert suite.passed is False
+    assert by_id["acme_q2_2026"].passed is True
+    assert by_id["broken"].passed is False
+    assert by_id["broken"].critical_errors[0].startswith("case error: KeyError")
 
 
 def test_suite_discovery_rejects_an_incomplete_case(tmp_path: Path) -> None:
