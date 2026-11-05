@@ -140,7 +140,10 @@ def _comparison_mismatch(
 ) -> str | None:
     if actual.metric != baseline.metric:
         return "metric_mismatch"
-    if actual.period != baseline.period:
+    if baseline.target == "prior_period":
+        if actual.period == baseline.period:
+            return "period_not_prior"
+    elif actual.period != baseline.period:
         return "period_mismatch"
     if actual.basis != baseline.basis:
         return "basis_mismatch"
